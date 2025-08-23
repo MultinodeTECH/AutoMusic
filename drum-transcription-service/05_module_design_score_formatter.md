@@ -1,51 +1,43 @@
-# Detailed Design: Score Formatter Module
+# Detailed Design: MIDI Generator Module
 
 ## 1. Introduction
 
-This document provides the detailed design for the **Score Formatter Module**. This is the final stage in the transcription pipeline. It takes the raw, classified onset data and transforms it into the clean, structured, and musically coherent JSON format that is the final product of the service.
+This document provides the detailed design for the **MIDI Generator Module**. Following the updated system architecture, this module is no longer a direct-to-JSON formatter. Instead, it serves a more crucial, intermediate role: converting the raw, classified onset data into a standard MIDI file. This MIDI file acts as a universal, musically-aware format that decouples the transcription process from the final score generation.
 
 ## 2. Module Responsibilities
 
-*   Accept a list of classified onsets (timestamps and instrument labels).
-*   Accept metadata such as estimated BPM and the original filename.
-*   (Optional but Recommended) Quantize the onset times to a musical grid.
-*   Map instrument labels to their corresponding General MIDI (GM) note numbers.
-*   Assemble the final data structure, including metadata and the sorted list of notes.
-*   Provide a method to save the final data structure to a JSON file.
+*   Accept a list of classified onsets (timestamps and instrument labels) and an estimated BPM.
+*   Map instrument labels to their corresponding General MIDI (GM) note numbers for percussion (Channel 10).
+*   Create a well-formed MIDI data structure containing a single track with all the drum notes.
+*   Encode the tempo (BPM) information into the MIDI file.
+*   Provide a method to save the MIDI data to a file (`.mid`).
 
 ## 3. Public API / Interface
 
-This module can be implemented as a class to handle the formatting process.
+This module can be implemented as a class to manage the MIDI creation process.
 
 ```python
-# Filename: score_formatter.py
-import json
+# Filename: midi_generator.py
+from mido import Message, MetaMessage, MidiFile, MidiTrack
 from typing import List, Dict, Any
 
-class ScoreFormatter:
-    def __init__(self, classified_onsets: List[Dict[str, Any]], bpm: float, original_filename: str):
+class MidiGenerator:
+    def __init__(self, classified_onsets: List[Dict[str, Any]], bpm: float):
         """
-        Initializes the formatter with the necessary data.
+        Initializes the generator with the necessary data.
         'classified_onsets' is a list of dicts, e.g., [{'time': 1.23, 'instrument': 'kick'}, ...]
         """
         # ...
 
-    def quantize_onsets(self, subdivision: int = 16):
+    def generate_midi_file(self) -> MidiFile:
         """
-        Aligns onset times to the nearest musical subdivision (e.g., 16th notes).
-        This is an optional but highly recommended step.
-        """
-        # ...
-
-    def generate_score_dict(self) -> Dict[str, Any]:
-        """
-        Generates the final Python dictionary that represents the JSON score.
+        Generates the final Mido MidiFile object.
         """
         # ...
 
-    def save_to_json(self, output_path: str):
+    def save_to_file(self, output_path: str):
         """
-        Saves the generated score dictionary to a JSON file.
+        Saves the generated MIDI data to a .mid file.
         """
         # ...
 ```
@@ -53,8 +45,9 @@ class ScoreFormatter:
 ## 4. Core Logic & Behavior
 
 ### 4.1. `__init__`
-1.  Store the input `classified_onsets`, `bpm`, and `original_filename`.
-2.  Define the mapping from instrument labels to MIDI note numbers.
+1.  **Store Inputs:** Store the `classified_onsets` and `bpm`.
+2.  **Sort Onsets:** Ensure the onsets are sorted by time, as this is crucial for correct MIDI delta time calculation. `self.classified_onsets.sort(key=lambda x: x['time'])`.
+3.  **Define MIDI Map:** Define the mapping from instrument labels to GM MIDI note numbers for percussion.
     ```python
     self.instrument_to_midi = {
         'kick': 36,
@@ -64,46 +57,33 @@ class ScoreFormatter:
     }
     ```
 
-### 4.2. `quantize_onsets` (Optional Step)
-1.  **Calculate Grid Interval:** Determine the duration of a single subdivision in seconds.
-    *   `seconds_per_beat = 60.0 / self.bpm`
-    *   `seconds_per_subdivision = seconds_per_beat / (subdivision / 4)` (e.g., for 16th notes, subdivision is 16, so `seconds_per_beat / 4`).
-2.  **Align Timestamps:** Iterate through `self.classified_onsets`. For each onset:
-    *   `original_time = onset['time']`
-    *   `grid_steps = round(original_time / seconds_per_subdivision)`
-    *   `quantized_time = grid_steps * seconds_per_subdivision`
-    *   Update the onset's time: `onset['time'] = quantized_time`.
-3.  **Remove Duplicates:** After quantization, it's possible for two different hits (e.g., a kick and a hi-hat) that were very close together to be quantized to the exact same timestamp. The logic should handle this gracefully. For the MVP, we can simply keep both.
-
-### 4.3. `generate_score_dict`
-1.  **Initialize Score Structure:** Create the main dictionary: `score = {"metadata": {}, "notes": []}`.
-2.  **Populate Metadata:**
-    *   `score['metadata']['title'] = f"Drum Transcription of {self.original_filename}"`
-    *   `score['metadata']['bpm'] = round(self.bpm, 2)`
-    *   `score['metadata']['difficulty'] = "N/A"`
-3.  **Populate Notes:**
-    *   Iterate through `self.classified_onsets`.
+### 4.2. `generate_midi_file`
+1.  **Initialize MIDI File:** Create a new `MidiFile` (type 1) and a `MidiTrack`.
+    *   `mid = MidiFile(type=1)`
+    *   `track = MidiTrack()`
+    *   `mid.tracks.append(track)`
+2.  **Set Tempo:** Add a tempo meta-message to the track. The tempo is specified in microseconds per beat.
+    *   `microseconds_per_beat = mido.bpm2tempo(self.bpm)`
+    *   `track.append(MetaMessage('set_tempo', tempo=microseconds_per_beat))`
+3.  **Add Notes:** Iterate through the sorted `classified_onsets`.
+    *   **Delta Time:** For each note, the most important value is the *delta time*—the time elapsed *since the previous event*.
+    *   Keep track of the `last_event_time_seconds`.
     *   For each `onset`:
-        a.  Get the instrument label (e.g., 'kick').
-        b.  Look up the MIDI note number from `self.instrument_to_midi`. If the label is not in the map, skip it.
-        c.  Convert the timestamp (in seconds) to milliseconds: `time_ms = int(onset['time'] * 1000)`.
-        d.  Create the note object: `note_obj = {"time": time_ms, "note": midi_note}`.
-        e.  Append `note_obj` to the `score['notes']` list.
-4.  **Sort Notes:** Although the onsets should already be sorted by time, it's good practice to sort the final `notes` list one last time to guarantee correctness: `score['notes'].sort(key=lambda x: x['time'])`.
-5.  **Calculate Duration:** The duration is the time of the last note. `last_note_time = score['notes'][-1]['time'] if score['notes'] else 0`. Set `score['metadata']['duration'] = last_note_time`.
-6.  **Return:** Return the completed `score` dictionary.
+        a.  `current_time_seconds = onset['time']`
+        b.  `delta_seconds = current_time_seconds - last_event_time_seconds`
+        c.  Convert `delta_seconds` to MIDI ticks. `ticks_per_beat` is a property of the `MidiFile` (default is 480). `delta_ticks = mido.second2tick(delta_seconds, mid.ticks_per_beat, self.bpm)`.
+        d.  Look up the MIDI note number from `self.instrument_to_midi`. If not found, skip it.
+        e.  Create the MIDI messages. For drums, a short duration is fine. We'll use a fixed velocity (e.g., 100).
+            *   `track.append(Message('note_on', note=midi_note, velocity=100, time=round(delta_ticks), channel=9))`
+            *   `track.append(Message('note_off', note=midi_note, velocity=0, time=30, channel=9))`  *(A small, non-zero time for the note duration)*
+        f.  Update `last_event_time_seconds = current_time_seconds`.
+4.  **Return:** Return the completed `mid` object.
 
-### 4.4. `save_to_json`
-1.  Call `self.generate_score_dict()` to get the final data.
-2.  Use Python's `json` library to write the dictionary to the specified `output_path`.
-    ```python
-    import json
-    with open(output_path, 'w') as f:
-        json.dump(score_data, f, indent=2)
-    ```
-    Using `indent=2` makes the output file human-readable.
+### 4.3. `save_to_file`
+1.  Call `self.generate_midi_file()` to get the final `MidiFile` object.
+2.  Use the object's built-in save method: `midi_file.save(output_path)`.
 
 ## 5. Data Structures
 
-*   **Input (`classified_onsets`):** A list of dictionaries, where each dictionary is `{'time': float_seconds, 'instrument': 'string_label'}`.
-*   **Output:** A dictionary conforming to the pre-defined drum score JSON format.
+*   **Input (`classified_onsets`):** A list of dictionaries, `{'time': float_seconds, 'instrument': 'string_label'}`.
+*   **Output:** A `mido.MidiFile` object, which can be saved to a standard `.mid` file.

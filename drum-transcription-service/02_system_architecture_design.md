@@ -21,12 +21,20 @@ graph TD
     C -- Drum Stem Waveform --> D(Stage 3: Onset Detector);
     D -- Onset Timestamps Array --> E(Stage 4: Feature Extractor);
     E -- Feature Vectors Array --> F(Stage 5: Instrument Classifier);
-    F -- Classified Onsets Array --> G(Stage 6: Score Formatter);
-    G -- JSON Data Structure --> H[Output JSON File<br/>(score.json)];
+    F -- Classified Onsets Array --> G(Stage 6: MIDI Generator);
+    G -- MIDI Data --> H(Stage 7: Score Generator);
+    H -- MusicXML File --> I[Output Score File<br/>(score.xml)];
 
     subgraph Pre-trained Models
         M1[Source Separation Model<br/>(e.g., Demucs)] --> C;
         M2[Instrument Classification Model<br/>(e.g., SVM)] --> F;
+    end
+
+    subgraph Core Libraries
+        L1[Librosa] --> B;
+        L1 --> D;
+        L1 --> E;
+        L2[Music21] --> H;
     end
 ```
 
@@ -87,13 +95,23 @@ This component combines feature extraction and classification.
     3.  **Collect Results:** Store the `(time, predicted_label)` pair.
     4.  Return the full list of classified onsets.
 
-### 4.6. Stage 6: Score Formatter (`score_formatter.py`)
-*   **Responsibility:** Converts the internal list of classified onsets into the final JSON output format.
-*   **Input:** `classified_onsets` array and metadata (e.g., input filename).
-*   **Output:** A Python dictionary representing the final JSON structure.
+### 4.6. Stage 6: MIDI Generator (`midi_generator.py`)
+*   **Responsibility:** Converts the list of classified onsets into a standard MIDI file. MIDI serves as a robust, intermediate representation of the transcription.
+*   **Input:** `classified_onsets` array and estimated BPM.
+*   **Output:** A MIDI file object (e.g., from the `mido` library).
+*   **Technology:** `mido` or a similar Python MIDI library.
 *   **Logic:**
-    1.  **BPM Estimation:** Use `librosa.beat.beat_track` on the drum stem to estimate the song's tempo (BPM).
-    2.  **Note Mapping:** Create a dictionary to map instrument labels to MIDI note numbers (e.g., `'kick': 36`).
-    3.  **Build Note List:** Iterate through the `classified_onsets`. For each onset, convert its timestamp to milliseconds and look up its MIDI note number. Create a note object `{ "time": ms, "note": midi_note }`.
-    4.  **Assemble JSON:** Create the final dictionary with `metadata` and the sorted `notes` list.
-    5.  The main controller will then take this dictionary and write it to the output file.
+    1.  Create a new MIDI track.
+    2.  Set the tempo based on the estimated BPM.
+    3.  Iterate through the `classified_onsets`. For each onset, create a MIDI `note_on` and `note_off` message. The note's pitch will correspond to the instrument (e.g., Kick=36), and its timing will be derived from the timestamp.
+    4.  Return the completed MIDI data structure.
+
+### 4.7. Stage 7: Score Generator (`score_generator.py`)
+*   **Responsibility:** Takes the intermediate MIDI data and generates a human-readable score file.
+*   **Input:** MIDI data.
+*   **Output:** A MusicXML file (`.xml`).
+*   **Technology:** `music21`.
+*   **Logic:**
+    1.  **Parse MIDI:** Use `music21.converter.parse()` to load the MIDI data into a `music21` stream object.
+    2.  **Process Stream (Optional):** Perform any necessary clean-up or quantization on the musical data if not already done.
+    3.  **Write to File:** Use the stream's `.write('musicxml', fp='output_path.xml')` method to save the final score. The main controller will handle the file path.

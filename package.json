@@ -1,0 +1,32 @@
+{
+  "dependencies": {
+    "jest": "^30.0.5"
+  },
+  "name": "automusic",
+  "version": "1.0.0",
+  "description": "Welcome to AutoMusic! This application is designed to generate complete musical melodies based on simple instrumental inputs using advanced AI technology, powered by Meta's AudioCraft framework.",
+  "main": "index.js",
+  "type": "module",
+  "directories": {
+    "test": "tests"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.28.3",
+    "babel-jest": "^30.0.5"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "transform": {
+      "^.+\\.js$": "babel-jest"
+    },
+    "moduleFileExtensions": [
+      "js",
+      "cjs"
+    ]
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

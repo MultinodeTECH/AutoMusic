@@ -1,0 +1,270 @@
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Press Start 2P", cursive;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  margin: 0;
+  background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+  color: #fff;
+  text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #0073e6, 0 0 20px #0073e6,
+    0 0 25px #0073e6, 0 0 30px #0073e6, 0 0 35px #0073e6;
+}
+
+#status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-bottom: 4px solid #00ffff;
+  box-shadow: 0 0 15px #00ffff;
+  gap: 15px;
+}
+
+#midi-status {
+  font-size: 0.8em;
+  color: #00ffff;
+  text-shadow: 0 0 5px #00ffff;
+}
+
+#midi-devices,
+button {
+  font-family: "Press Start 2P", cursive;
+  background-color: #222;
+  color: #00ffff;
+  border: 2px solid #00ffff;
+  padding: 10px;
+  box-shadow: 0 0 5px #00ffff, inset 0 0 5px #00ffff;
+  text-shadow: 0 0 5px #00ffff;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+#midi-devices:hover,
+button:hover {
+  background-color: #00ffff;
+  color: #111;
+  box-shadow: 0 0 15px #00ffff, inset 0 0 10px #fff;
+  text-shadow: 0 0 5px #111;
+}
+
+#midi-devices {
+  flex-grow: 1;
+}
+
+button {
+  min-width: 120px;
+}
+
+#game-container {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start; /* Align to the top */
+  padding-top: 20px;
+  gap: 20px;
+}
+
+#score-display {
+  display: flex;
+  justify-content: space-between;
+  width: 80%;
+  font-size: 1.5em;
+  color: #ff9900;
+  text-shadow: 0 0 5px #ff9900, 0 0 10px #ff9900;
+}
+
+#virtual-drum-kit {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap; /* Allow wrapping */
+  gap: 15px;
+  padding: 20px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-top: 4px solid #00ffff;
+  box-shadow: 0 0 15px #00ffff;
+}
+
+.drum-pad {
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.7em;
+  color: #fff;
+  background: radial-gradient(circle, #555 0%, #222 100%);
+  border: 4px solid;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.1s ease-out;
+  user-select: none;
+  position: relative;
+}
+
+.drum-pad::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
+  border-radius: 50%;
+  filter: blur(10px);
+  opacity: 0.8;
+  z-index: -1;
+}
+
+/* Assign specific neon colors to pads */
+#pad-kick {
+  border-color: #ff4136;
+}
+#pad-kick::before {
+  background: #ff4136;
+}
+#pad-snare {
+  border-color: #0074d9;
+}
+#pad-snare::before {
+  background: #0074d9;
+}
+#pad-hihat {
+  border-color: #2ecc40;
+}
+#pad-hihat::before {
+  background: #2ecc40;
+}
+#pad-hihat-open {
+  border-color: #ffdc00;
+}
+#pad-hihat-open::before {
+  background: #ffdc00;
+}
+#pad-crash {
+  border-color: #b10dc9;
+}
+#pad-crash::before {
+  background: #b10dc9;
+}
+#pad-ride {
+  border-color: #f012be;
+}
+#pad-ride::before {
+  background: #f012be;
+}
+#pad-tom-high {
+  border-color: #ff851b;
+}
+#pad-tom-high::before {
+  background: #ff851b;
+}
+#pad-tom-mid {
+  border-color: #7fdbff;
+}
+#pad-tom-mid::before {
+  background: #7fdbff;
+}
+#pad-tom-low {
+  border-color: #39cccc;
+}
+#pad-tom-low::before {
+  background: #39cccc;
+}
+
+.drum-pad.pad-hit {
+  transform: scale(1.1);
+  box-shadow: 0 0 25px currentColor, 0 0 40px #fff;
+  background: radial-gradient(circle, #fff 0%, #888 100%);
+}
+
+#renderer-area {
+  position: relative;
+  width: 80%;
+  flex-grow: 1; /* Take remaining space */
+  background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.9));
+  border: 4px solid #ff00ff;
+  border-radius: 10px;
+  box-shadow: 0 0 20px #ff00ff, inset 0 0 20px #ff00ff;
+  overflow: hidden;
+  margin-bottom: 20px; /* Add some space at the bottom */
+}
+
+#hit-zone {
+  position: absolute;
+  bottom: 20px; /* Raised a bit */
+  width: 100%;
+  height: 20px;
+  background: linear-gradient(to top, #ff00ff, transparent);
+  border-top: 4px solid #fff;
+  box-shadow: 0 0 20px #fff;
+}
+
+.falling-note {
+  position: absolute;
+  width: 60px; /* Slightly wider */
+  height: 25px;
+  border-radius: 5px;
+  box-shadow: 0 0 10px #fff, 0 0 15px currentColor, 0 0 20px currentColor;
+  border: 2px solid #fff;
+}
+
+/* Example colors for different notes */
+.note-36 {
+  background-color: #ff4136;
+  left: 10%;
+} /* Kick */
+.note-38 {
+  background-color: #0074d9;
+  left: 25%;
+} /* Snare */
+.note-42 {
+  background-color: #2ecc40;
+  left: 40%;
+} /* Hi-Hat */
+.note-46 {
+  background-color: #ffdc00;
+  left: 55%;
+} /* Open Hi-Hat */
+.note-49 {
+  background-color: #b10dc9;
+  left: 70%;
+} /* Crash */
+.note-51 {
+  background-color: #f012be;
+  left: 85%;
+} /* Ride */
+
+/* --- Animations --- */
+@keyframes neon-flicker {
+  0%,
+  100% {
+    text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #0073e6, 0 0 20px #0073e6,
+      0 0 25px #0073e6, 0 0 30px #0073e6, 0 0 35px #0073e6;
+    box-shadow: 0 0 5px #00ffff, 0 0 10px #00ffff, inset 0 0 5px #00ffff;
+  }
+  50% {
+    text-shadow: 0 0 10px #fff, 0 0 15px #fff, 0 0 20px #0073e6,
+      0 0 25px #0073e6, 0 0 30px #0073e6, 0 0 35px #0073e6, 0 0 40px #0073e6;
+    box-shadow: 0 0 10px #00ffff, 0 0 15px #00ffff, inset 0 0 10px #00ffff;
+  }
+}
+
+body,
+#status-bar,
+#virtual-drum-kit,
+.drum-pad,
+button,
+#renderer-area,
+#hit-zone {
+  animation: neon-flicker 3s infinite alternate;
+}

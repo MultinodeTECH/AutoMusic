@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "title": "Basic 4/4 Rock Beat",
+    "artist": "System",
+    "bpm": 120,
+    "duration": 4000,
+    "difficulty": "Beginner"
+  },
+  "notes": [
+    { "time": 0, "note": 36 },
+    { "time": 0, "note": 42 },
+    { "time": 500, "note": 42 },
+    { "time": 1000, "note": 38 },
+    { "time": 1000, "note": 42 },
+    { "time": 1500, "note": 42 },
+    { "time": 2000, "note": 36 },
+    { "time": 2000, "note": 42 },
+    { "time": 2500, "note": 42 },
+    { "time": 3000, "note": 38 },
+    { "time": 3000, "note": 42 },
+    { "time": 3500, "note": 42 }
+  ]
+}

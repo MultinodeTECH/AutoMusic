@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>专业电子鼓练习界面 (游戏模式)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827;
+            color: #f3f4f6;
+            overflow: hidden;
+            /* 防止滚动 */
+        }
+
+        /* 鼓谱区域 */
+        #notation-area {
+            background: linear-gradient(to bottom, #000000, #1f2937);
+        }
+
+        #playhead {
+            position: absolute;
+            left: 20%;
+            /* 判定线固定在左侧20%位置 */
+            width: 4px;
+            height: 100%;
+            background-color: #c084fc;
+            box-shadow: 0 0 15px #c084fc;
+            z-index: 10;
+        }
+
+        #notes-track {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            /* JS会控制这个容器的动画 */
+        }
+
+        .note {
+            position: absolute;
+            width: 30px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: #67e8f9;
+            /* cyan-300 */
+            transition: background-color 0.2s, transform 0.2s;
+            z-index: 5;
+        }
+
+        /* 根据不同鼓件，定位音符在五线谱上的高度 */
+        .note[data-note="36"] {
+            top: 80%;
+            background-color: #4ade80;
+        }
+
+        /* Kick */
+        .note[data-note="38"] {
+            top: 50%;
+            background-color: #f87171;
+        }
+
+        /* Snare */
+        .note[data-note="42"] {
+            top: 20%;
+            background-color: #facc15;
+        }
+
+        /* Hi-Hat */
+        .note[data-note="49"] {
+            top: 10%;
+            background-color: #fb923c;
+        }
+
+        /* Crash */
+        /* ...可以为其他鼓件添加更多样式 */
+
+        /* 音符命中和错过的特效 */
+        .note.hit-success {
+            animation: hit-effect 0.3s ease-out forwards;
+        }
+
+        @keyframes hit-effect {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+
+        .note.missed {
+            background-color: #ef4444;
+            /* red-500 */
+            transform: translateX(-50px) rotate(-15deg);
+            opacity: 0.5;
+        }
+
+
+        /* 演奏区域样式 (与之前版本类似) */
+        .drum-pad-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            height: 300px;
+            margin: auto;
+        }
+
+        .drum-pad {
+            position: absolute;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            cursor: pointer;
+            transition: all 0.07s ease-in-out;
+            border: 3px solid #4b5563;
+            background-color: #1f2937;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .drum-pad.hit {
+            transform: scale(1.08);
+            border-color: #67e8f9;
+            box-shadow: 0 0 25px #67e8f9;
+        }
+
+        .drum-pad span {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #d1d5db;
+        }
+
+        #pad-42,
+        #pad-46 {
+            width: 90px;
+            height: 90px;
+            left: 5%;
+            top: 40%;
+            background-color: #be185d;
+        }
+
+        #pad-46 {
+            top: 65%;
+        }
+
+        #pad-49 {
+            width: 110px;
+            height: 110px;
+            left: 18%;
+            top: 10%;
+            background-color: #d97706;
+        }
+
+        #pad-38,
+        #pad-40 {
+            width: 110px;
+            height: 110px;
+            left: 30%;
+            top: 50%;
+        }
+
+        #pad-36 {
+            width: 80px;
+            height: 80px;
+            left: 50%;
+            top: 60%;
+            transform: translateX(-50%);
+            background-color: #16a34a;
+        }
+
+        #pad-48 {
+            width: 85px;
+            height: 85px;
+            left: 45%;
+            top: 20%;
+            border-color: #2dd4bf;
+        }
+
+        #pad-45 {
+            width: 85px;
+            height: 85px;
+            left: 58%;
+            top: 20%;
+            border-color: #38bdf8;
+        }
+
+        #pad-41 {
+            width: 100px;
+            height: 100px;
+            left: 70%;
+            top: 50%;
+        }
+
+        #pad-51,
+        #pad-53 {
+            width: 120px;
+            height: 120px;
+            right: 5%;
+            top: 25%;
+            background-color: #dc2626;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col h-screen">
+
+    <!-- 顶部控制栏 -->
+    <header class="flex items-center p-4 bg-gray-900 shadow-md z-20">
+        <div id="game-controls">
+            <button id="start-button"
+                class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">开始练习</button>
+        </div>
+        <div class="flex-grow text-center">
+            <p id="score" class="text-2xl font-bold">Score: 0</p>
+        </div>
+        <div id="combo-display" class="w-32 text-right">
+            <p class="text-xl font-bold">Combo: <span id="combo-count">0</span></p>
+        </div>
+    </header>
+
+    <!-- 鼓谱区 -->
+    <main id="notation-area" class="flex-grow flex items-center justify-center relative overflow-hidden">
+        <div class="w-full h-48 relative">
+            <!-- 五线谱背景 -->
+            <div class="absolute inset-0 flex flex-col justify-around w-full px-4">
+                <div class="h-0.5 bg-gray-600"></div>
+                <div class="h-0.5 bg-gray-600"></div>
+                <div class="h-0.5 bg-gray-600"></div>
+                <div class="h-0.5 bg-gray-600"></div>
+                <div class="h-0.5 bg-gray-600"></div>
+            </div>
+            <!-- 判定线 -->
+            <div id="playhead"></div>
+            <!-- 音符轨道 -->
+            <div id="notes-track"></div>
+        </div>
+    </main>
+
+    <!-- 演奏区 -->
+    <footer class="h-1/2 min-h-[350px] bg-gray-800 p-4 flex flex-col justify-center items-center shadow-inner">
+        <p id="status" class="text-center text-yellow-400 mb-4">正在等待 MIDI 连接...</p>
+        <div class="drum-pad-container">
+            <div id="pad-42" class="drum-pad"><span>HH CLOSED</span></div>
+            <div id="pad-46" class="drum-pad"><span>HH OPEN</span></div>
+            <div id="pad-49" class="drum-pad"><span>CRASH</span></div>
+            <div id="pad-38" class="drum-pad"><span>SNARE</span></div>
+            <div id="pad-40" class="drum-pad hidden"><span>SNARE RIM</span></div>
+            <div id="pad-36" class="drum-pad"><span>KICK</span></div>
+            <div id="pad-48" class="drum-pad"><span>TOM 1</span></div>
+            <div id="pad-45" class="drum-pad"><span>TOM 2</span></div>
+            <div id="pad-41" class="drum-pad"><span>TOM 3</span></div>
+            <div id="pad-51" class="drum-pad"><span>RIDE</span></div>
+            <div id="pad-53" class="drum-pad hidden"><span>RIDE BELL</span></div>
+        </div>
+    </footer>
+
+    <script src="src/practice_mode_2_app.js" type="module"></script>
+</body>
+
+</html>

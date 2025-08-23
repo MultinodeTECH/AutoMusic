@@ -2,7 +2,7 @@
 
 ## 1. Core Goal
 
-To develop a robust, automated system capable of processing a standard audio file (e.g., MP3, WAV), identifying the drum track within it, and transcribing the drum hits into a structured, machine-readable format (e.g., the JSON drum score format we previously defined).
+To develop a robust, automated system capable of processing a standard audio file (e.g., MP3, WAV), identifying the drum track within it, transcribing the drum hits into a standard MIDI file, and finally generating a human-readable musical score (e.g., in MusicXML format).
 
 ## 2. Core Features (MVP)
 
@@ -20,7 +20,7 @@ The MVP will focus on delivering a functional proof-of-concept that can handle c
         *   Snare Drum
         *   Hi-Hat (can be simplified to a single class, ignoring open/closed distinction for now)
 *   **Score Generation:**
-    *   Convert the list of timed, classified drum hits into the previously defined JSON drum score format.
+    *   Convert the list of timed, classified drum hits into a standard MIDI file and a final, readable score format like MusicXML.
 
 ## 3. Technology Stack & Approach
 
@@ -30,7 +30,9 @@ This project is heavily focused on audio signal processing and machine learning.
 *   **Core Libraries:**
     *   **`librosa`:** The industry standard for audio analysis and feature extraction in Python. It will be used for loading audio, calculating spectrograms, and onset detection.
     *   **`demucs` or `spleeter`:** Pre-trained deep learning models for music source separation. These are excellent for isolating the drum track from a full mix. `demucs` is a more modern and often higher-quality choice.
-    *   **`scikit-learn`:** For building a classical machine learning model (e.g., SVM, RandomForest) for drum sound classification. This is a good starting point before moving to more complex deep learning models.
+    *   **`scikit-learn`:** For building a classical machine learning model (e.g., SVM, RandomForest) for drum sound classification.
+    *   **`mido`:** For robust creation and handling of MIDI files as the intermediate format.
+    *   **`music21`:** A powerful toolkit for computational musicology, used to convert the intermediate MIDI file into a final score format like MusicXML.
     *   **`numpy`:** For all numerical operations.
 *   **Execution Environment:**
     *   **Command-Line Interface (CLI):** The MVP will be a CLI tool. A user will run a command like `python transcribe.py --input song.mp3 --output score.json`.
@@ -61,11 +63,18 @@ The project can be broken down into a clear, sequential pipeline.
         2.  **Model Training:** Train a classifier (e.g., a Support Vector Machine) on the labeled dataset to distinguish between Kick, Snare, and Hi-Hat based on their features.
         3.  **Integration:** Integrate the trained model into the pipeline to classify the onsets detected in Phase 2.
 
-*   **Phase 4: Score Generation & Refinement**
-    *   **Goal:** Convert the classified hits into the final JSON format and refine the output.
+*   **Phase 4: MIDI Generation**
+    *   **Goal:** Convert the classified hits into a standard, intermediate MIDI file.
     *   **Tasks:**
-        1.  **Formatter:** Write a module that takes the final list of `(timestamp, instrument_label)` and converts it into the JSON score format (mapping labels to MIDI notes).
-        2.  **Quantization (Optional but Recommended):** Implement a simple quantization algorithm to align the detected hit times to a musical grid (e.g., the nearest 16th note). This makes the output much cleaner and more useful.
+        1.  **MIDI Converter:** Write a module that takes the final list of `(timestamp, instrument_label)` and an estimated BPM.
+        2.  **MIDI Events:** For each hit, create corresponding MIDI `note_on`/`note_off` messages on the percussion channel (10).
+        3.  **Quantization (Optional):** Quantization can be applied here to align MIDI events to a musical grid, resulting in a cleaner MIDI file.
+
+*   **Phase 5: Score Generation**
+    *   **Goal:** Convert the intermediate MIDI file into a human-readable score.
+    *   **Tasks:**
+        1.  **MIDI Parser:** Use the `music21` library to parse the generated MIDI file.
+        2.  **Score Output:** Convert the parsed musical data into a standard format like MusicXML, which can be opened by any standard notation software.
 
 ## 5. Future Roadmap
 
