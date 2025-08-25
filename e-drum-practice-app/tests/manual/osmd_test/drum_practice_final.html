@@ -315,46 +315,52 @@
 
                 // Before moving to the next note, check if the current one was missed
                 if (currentTargetNote && !currentTargetNote.hit) {
-                    console.log("Missed note:", currentTargetNote);
                     stats.misses++;
                     stats.score = Math.max(0, stats.score - 5);
                     updateScore();
-                    osmdTarget.EngravingRules.setNoteColor(currentTargetNote.sourceNote, "red");
-                    osmdTarget.render();
+                    // Note: setNoteColor is not a standard OSMD API, this might need adjustment
+                    // osmdTarget.EngravingRules.setNoteColor(currentTargetNote.sourceNote, "red");
+                    // osmdTarget.render();
+                }
+
+                // Advance cursor past non-note elements
+                while (osmdTarget.cursor.NotesUnderCursor().length === 0 && !osmdTarget.cursor.Iterator.EndReached) {
+                    osmdTarget.cursor.next();
                 }
 
                 if (osmdTarget.cursor.Iterator.EndReached) {
-                    isPlaying = false;
-                    playBtn.textContent = "Play";
                     osmdTarget.cursor.reset();
-                    currentTargetNote = null;
-                    showResults();
+                    const bpm = parseInt(bpmSlider.value, 10);
+                    const quarterNoteDurationMs = (60 / bpm) * 1000;
+                    timeoutId = setTimeout(playNextNote, quarterNoteDurationMs / 4); // Short delay before restart
                     return;
                 }
 
-                osmdTarget.cursor.next(); // Move cursor first
-                const note = osmdTarget.cursor.Iterator.CurrentNote;
-
-                if (note) {
-                    currentTargetNote = note;
-                    console.log("Current target note:", currentTargetNote);
-
-                    const duration = note.Length.RealValue;
-                    const bpm = parseInt(bpmSlider.value, 10);
-                    const quarterNoteDurationMs = (60 / bpm) * 1000;
-                    const noteDurationMs = quarterNoteDurationMs * (duration * 4);
-
-                    timeoutId = setTimeout(() => {
-                        currentTargetNote = null; // Note is no longer active
-                        playNextNote();
-                    }, noteDurationMs);
-                } else {
-                    // Handle rests or end of score
-                    currentTargetNote = null;
-                    const bpm = parseInt(bpmSlider.value, 10);
-                    const quarterNoteDurationMs = (60 / bpm) * 1000;
-                    timeoutId = setTimeout(playNextNote, quarterNoteDurationMs); // Assume rest is a quarter note
+                const notes = osmdTarget.cursor.NotesUnderCursor();
+                if (notes.length === 0) {
+                    // Should not happen due to the while loop, but as a safeguard
+                    osmdTarget.cursor.next();
+                    playNextNote();
+                    return;
                 }
+                const note = notes[0]; // Use the first note at the cursor position
+                currentTargetNote = note;
+
+                const duration = note.Length.RealValue;
+                const bpm = parseInt(bpmSlider.value, 10);
+                const quarterNoteDurationMs = (60 / bpm) * 1000;
+                // The duration calculation seems to be a common point of error.
+                // OSMD's RealValue is often a fraction of a whole note.
+                // A quarter note has RealValue of 0.25.
+                // So, duration in ms = quarterNoteDurationMs * (RealValue / 0.25) = quarterNoteDurationMs * RealValue * 4
+                const noteDurationMs = quarterNoteDurationMs * duration * 4;
+
+
+                timeoutId = setTimeout(() => {
+                    currentTargetNote = null;
+                    osmdTarget.cursor.next(); // Move to the next element for the next call
+                    playNextNote();
+                }, noteDurationMs);
             }
 
             // --- User Input ---
@@ -365,7 +371,14 @@
                     // First hit of the session
                     isRecording = true;
                     lastHitTime = now;
-                    console.log("Recording started...");
+                    console.log("Recording started, triggering target score playback...");
+
+                    // --- TRIGGER TARGET SCORE PLAYBACK ---
+                    if (!isPlaying) {
+                        handlePlay();
+                    }
+                    // ------------------------------------
+
                     // Add a placeholder note immediately for instant feedback
                     userNotes.push({ type: '16th' });
                 } else {
@@ -410,7 +423,9 @@
                 if (isPlaying) {
                     playBtn.textContent = "Pause";
                     // Reset cursor to start before playing
+                    osmdTarget.cursor.show();
                     osmdTarget.cursor.reset();
+                    // Start playback by moving to the first element first
                     playNextNote();
                 } else {
                     playBtn.textContent = "Play";
@@ -459,6 +474,7 @@
             // --- Initialization ---
             async function initialize() {
                 await loadTargetScore();
+                osmdTarget.cursor.hide(); // Hide cursor initially
                 await loadUserScore();
                 console.log("Application initialized.");
             }
