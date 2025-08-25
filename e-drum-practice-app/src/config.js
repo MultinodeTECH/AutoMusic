@@ -1,33 +1,20 @@
-/**
- * @fileoverview Configuration file for the E-Drum Practice App.
- * This file contains constants and settings used throughout the application.
- */
+// --- Game Configuration ---
+export const NOTE_SPEED = 0.1; // pixels per millisecond
+export const HIT_WINDOW = 80; // milliseconds
 
-/**
- * Timing windows for note hits, in milliseconds.
- * These values define the thresholds for 'Perfect' and 'Good' hits.
- * @const
- * @type {{PERFECT_THRESHOLD_MS: number, GOOD_THRESHOLD_MS: number}}
- */
-export const TIMING_WINDOWS = {
-    PERFECT_THRESHOLD_MS: 50, // +/- 50ms from the note's exact time
-    GOOD_THRESHOLD_MS: 100,     // +/- 100ms from the note's exact time
-};
-
-/**
- * Scoring configuration.
- * Defines points for each judgement and combo bonus logic.
- * @const
- * @type {{POINTS: {PERFECT: number, GOOD: number, MISS: number}, COMBO_BONUS: function(number): number}}
- */
-export const SCORING_CONFIG = {
-    POINTS: {
-        PERFECT: 100,
-        GOOD: 50,
-        MISS: 0,
-    },
-    // Example: A simple bonus for every 10 combos
-    COMBO_BONUS: (combo) => {
-        return Math.floor(combo / 10) * 5;
-    }
+// --- Standard Drum Notation Mapping ---
+// MIDI Note: [yPosition (%), noteType, stemDirection]
+// yPosition is based on standard 5-line staff positions.
+export const NOTE_MAP = {
+    36: [87.5, 'note', 'down'], // Kick Drum (F space below staff)
+    38: [62.5, 'note', 'up'],   // Snare Drum (C space)
+    40: [62.5, 'note', 'up'],   // Rimshot (Same as snare)
+    41: [75, 'note', 'down'], // Floor Tom (A space)
+    42: [37.5, 'cross', 'up'],  // Hi-Hat (G space above staff)
+    45: [50, 'note', 'up'],   // Mid Tom (D space)
+    46: [37.5, 'cross', 'up'],  // Hi-Hat Open
+    48: [37.5, 'note', 'up'],   // High Tom (E space)
+    49: [25, 'cross', 'up'],  // Crash Cymbal (On ledger line above staff)
+    51: [25, 'cross', 'up'],  // Ride Cymbal (Same as crash)
+    57: [12.5, 'cross', 'up'],  // Crash 2 (Higher ledger line)
 };

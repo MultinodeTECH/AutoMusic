@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>VexFlow Barebones Test</title>
+</head>
+
+<body>
+    <h1>VexFlow Barebones Test</h1>
+    <p>If you see a properly rendered musical score below, VexFlow is working correctly.</p>
+    <div id="output"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow-core.js"></script>
+    <script>
+        /* global VexFlow */
+        VexFlow.loadFonts('Bravura', 'Academico').then(() => {
+            VexFlow.setFonts('Bravura', 'Academico');
+            const { Renderer, Stave, StaveNote, Voice, Formatter } = VexFlow;
+
+            const div = document.getElementById('output');
+            const renderer = new Renderer(div, Renderer.Backends.SVG);
+
+            renderer.resize(500, 200);
+            const context = renderer.getContext();
+
+            const stave = new Stave(10, 40, 400);
+            stave.addClef('treble').addTimeSignature('4/4');
+            stave.setContext(context).draw();
+
+            const notes = [
+                new StaveNote({ keys: ["c/4"], duration: "q" }),
+                new StaveNote({ keys: ["d/4"], duration: "q" }),
+                new StaveNote({ keys: ["b/4"], duration: "qr" }),
+                new StaveNote({ keys: ["c/4", "e/4", "g/4"], duration: "q" })
+            ];
+
+            const voice = new Voice({ num_beats: 4, beat_value: 4 });
+            voice.addTickables(notes);
+
+            new Formatter().joinVoices([voice]).format([voice], 350);
+
+            voice.draw(context, stave);
+        });
+    </script>
+</body>
+
+</html>

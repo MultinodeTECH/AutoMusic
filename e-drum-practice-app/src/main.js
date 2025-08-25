@@ -1,56 +1,117 @@
-import UIView from './ui_view.js';
-import { MIDIService } from './midi_service.js';
-import { eventBus } from './event_bus.js';
-import { ScoreLoader } from './score_loader.js';
-import { GameEngine } from './game_engine.js';
-import { ScoringSystem } from './scoring_system.js';
-import { Renderer } from './renderer.js';
+import { stateManager } from './core/state_manager.js';
+import { CanvasRenderer } from './rendering/canvas_renderer.js';
+import { initMidi, setOnNoteOn } from './services/midi_service.js';
+import * as scrollMode from './game_modes/scroll_mode_logic.js';
+import * as fallingMode from './game_modes/falling_mode_logic.js';
+import { songData as basicRockScore1 } from '../scores/basic_rock_1.js';
 
-document.addEventListener('DOMContentLoaded', async () => {
-    UIView.init();
+const gameModes = {
+    scroll: scrollMode,
+    falling: fallingMode,
+};
 
-    const midiInitialized = await MIDIService.init();
-    const LAST_DEVICE_ID_KEY = 'eDrumPracticeApp.lastConnectedDeviceId';
+async function main() {
+    const stateManagerInstance = stateManager;
+    const canvasRenderer = new CanvasRenderer('game-container');
+    initMidi();
 
-    if (midiInitialized) {
-        const devices = MIDIService.getAvailableDevices();
-        UIView.updateDeviceList(devices);
+    // --- Pre-load score data ---
+    const noteCoordinates = canvasRenderer.loadScore(basicRockScore1);
 
-        // Attempt to auto-connect to the last used device
-        const lastDeviceId = localStorage.getItem(LAST_DEVICE_ID_KEY);
-        if (lastDeviceId && devices.some(d => d.id === lastDeviceId)) {
-            await MIDIService.connectToDevice(lastDeviceId);
+
+    // --- State and Rendering Setup ---
+    stateManagerInstance.subscribe(canvasRenderer.render.bind(canvasRenderer));
+
+    // --- MIDI Input Handling ---
+    setOnNoteOn((note, velocity) => {
+        const action = { type: 'NOTE_ON', payload: { note, velocity } };
+        stateManagerInstance.setState(prevState => ({
+            ...prevState,
+            actions: [...(prevState.actions || []), action]
+        }));
+    });
+
+    // --- UI Event Listeners ---
+    const scrollModeButton = document.getElementById('scroll-mode-btn');
+    const fallingModeButton = document.getElementById('falling-mode-btn');
+    const startStopButton = document.getElementById('start-stop-btn');
+
+    scrollModeButton.addEventListener('click', () => {
+        const initialState = scrollMode.getInitialState();
+        stateManagerInstance.setState({
+            ...initialState,
+            gameMode: 'scroll',
+            gameRunning: false,
+            notes: noteCoordinates // Load the pre-calculated notes
+        });
+    });
+
+    fallingModeButton.addEventListener('click', () => {
+        const initialState = fallingMode.getInitialState();
+        stateManagerInstance.setState({
+            ...initialState,
+            gameMode: 'falling',
+            gameRunning: false
+        });
+    });
+
+    startStopButton.addEventListener('click', () => {
+        const currentState = stateManagerInstance.getState();
+        const isStarting = !currentState.gameRunning;
+        const currentModeLogic = gameModes[currentState.gameMode];
+
+        if (currentModeLogic) {
+            let nextState;
+            if (isStarting) {
+                // Pass a clean, initial state to the onStart function
+                const initialState = {
+                    ...currentState,
+                    currentSongData: basicRockScore1.notes, // Assuming this is the format
+                    startTime: performance.now()
+                };
+                nextState = currentModeLogic.onStart(initialState);
+            } else {
+                nextState = currentModeLogic.onStop(currentState);
+            }
+            stateManagerInstance.setState({ ...nextState, gameRunning: isStarting });
         }
+    });
+
+    // --- Game Loop ---
+    let lastTime = 0;
+    function gameLoop(currentTime) {
+        if (!lastTime) lastTime = currentTime;
+        // const deltaTime = currentTime - lastTime;
+
+        const currentState = stateManagerInstance.getState();
+        const currentModeLogic = gameModes[currentState.gameMode];
+
+        if (currentState.gameRunning && currentModeLogic && currentModeLogic.update) {
+            const actions = currentState.actions || [];
+            const newState = currentModeLogic.update(currentState, currentTime, actions);
+
+            // Clear actions after they've been processed
+            newState.actions = [];
+
+            stateManagerInstance.setState(newState);
+        }
+
+        lastTime = currentTime;
+        requestAnimationFrame(gameLoop);
     }
 
-    // Handle manual connect button clicks
-    eventBus.subscribe('ui:connect', async (deviceId) => {
-        await MIDIService.connectToDevice(deviceId);
+    // --- Initial State ---
+    stateManagerInstance.setState({
+        gameMode: 'falling',
+        gameRunning: false,
+        actions: [],
+        notes: [],
+        hitEffects: [],
+        score: 0,
+        combo: 0,
     });
 
-    // Save the device ID on successful connection
-    eventBus.subscribe('midi:connected', ({ deviceId }) => {
-        localStorage.setItem(LAST_DEVICE_ID_KEY, deviceId);
-    });
+    requestAnimationFrame(gameLoop);
+}
 
-    // Load the score and initialize the game
-    const scoreLoader = new ScoreLoader();
-    const scoreData = await scoreLoader.loadScore('scores/funky_beat.json');
-
-    const gameEngine = new GameEngine(scoreData, eventBus);
-    const scoringSystem = new ScoringSystem(eventBus, scoreData.notes.length);
-    const renderer = new Renderer(document.getElementById('renderer-area'), gameEngine);
-
-    // Modify the game engine's update loop to include rendering
-    const originalUpdate = gameEngine.update.bind(gameEngine);
-    gameEngine.update = (timestamp) => {
-        originalUpdate(timestamp);
-        renderer.update();
-    };
-
-    eventBus.subscribe('ui:startGame', () => {
-        gameEngine.start();
-        scoringSystem.subscribeToEvents();
-        document.getElementById('start-game-btn').style.display = 'none';
-    });
-});
+document.addEventListener('DOMContentLoaded', main);

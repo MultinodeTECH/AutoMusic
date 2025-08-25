@@ -1,0 +1,40 @@
+/*
+ * VexFlow CSS Reset - v2
+ * A more robust reset to prevent conflicts with CSS frameworks like Tailwind.
+ */
+
+/* Isolate the VexFlow container. */
+.vexflow-container svg {
+  overflow: visible !important;
+  font-family: "Bravura", "Academico";
+}
+
+/*
+ * Reset core SVG element properties that are often overridden by global resets.
+ * We target all common VexFlow elements within the container.
+ */
+.vexflow-container svg g,
+.vexflow-container svg path,
+.vexflow-container svg rect,
+.vexflow-container svg text,
+.vexflow-container svg use {
+  stroke: #000;
+  fill: #000;
+  stroke-width: 1px; /* A consistent base stroke-width */
+  font-family: inherit; /* Inherit the correct music font */
+  font-size: inherit;
+}
+
+/*
+ * Specific overrides for different element types.
+ */
+
+/* Text elements (clefs, notes, time signatures) should have no stroke by default. */
+.vexflow-container svg text {
+  stroke: none;
+}
+
+/* Paths (stems, beams, barlines) should have a stroke but no fill. */
+.vexflow-container svg path {
+  fill: none;
+}

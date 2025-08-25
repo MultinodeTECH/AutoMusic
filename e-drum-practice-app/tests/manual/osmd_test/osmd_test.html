@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSMD MIDI Interaction Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+
+        #osmd-container {
+            width: 800px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>OSMD MIDI Interaction Test</h1>
+    <div id="controls">
+        <button id="playBtn">Next Note</button>
+        <button id="stopBtn">Reset</button>
+        <button id="hitBtn">Simulate Hit</button>
+    </div>
+    <div id="osmd-container"></div>
+
+    <!-- OSMD Library -->
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@latest/build/opensheetmusicdisplay.min.js"></script>
+
+    <!-- Main Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const osmdContainer = document.getElementById('osmd-container');
+            const playBtn = document.getElementById('playBtn');
+            const stopBtn = document.getElementById('stopBtn');
+
+            const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(osmdContainer, {
+                backend: "svg",
+                drawTitle: true,
+                drawingParameters: "compact", // or "default", "leadsheet", "thumbnail"
+                drawPartNames: false,
+                percussionClef: true,
+                // Add other OSMD options here
+            });
+
+            osmd.load("simple_drum.xml")
+                .then(() => {
+                    osmd.render();
+                    console.log("Score loaded and rendered successfully.");
+                    osmd.cursor.show(); // Show the cursor
+                    // The way to iterate through notes is different in newer OSMD versions.
+                    // The following is a placeholder for the correct iteration logic.
+                    // A proper implementation would involve getting the iterator from the cursor
+                    // and manually advancing it. The addIteratorCallback is not a function.
+                    console.log("OSMD cursor is ready. Note iteration logic needs to be updated for the current OSMD version.");
+                })
+                .catch((error) => {
+                    console.error("Error loading or rendering score:", error);
+                });
+
+            let currentNote = null;
+
+            playBtn.addEventListener('click', () => {
+                osmd.cursor.next();
+            });
+
+            stopBtn.addEventListener('click', () => {
+                osmd.cursor.reset();
+                currentNote = null;
+                console.log("Cursor reset.");
+            });
+
+            document.getElementById('hitBtn').addEventListener('click', () => {
+                if (currentNote) {
+                    console.log(`SUCCESS: Hit registered for note ${currentNote.sourceNote.voiceEntry.notes[0].sourceNote.pitch.step}.`);
+                    osmd.EngravingRules.setNoteColor(currentNote.sourceNote, "green");
+                    osmd.render();
+                } else {
+                    console.log("FAIL: Hit registered, but no note was active.");
+                }
+            });
+
+            // Add a function to handle misses, which we can call later
+            function handleMiss() {
+                if (currentNote) {
+                    console.log(`MISS: No hit registered for note ${currentNote.sourceNote.voiceEntry.notes[0].sourceNote.pitch.step}.`);
+                    osmd.EngravingRules.setNoteColor(currentNote.sourceNote, "red");
+                    osmd.render();
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

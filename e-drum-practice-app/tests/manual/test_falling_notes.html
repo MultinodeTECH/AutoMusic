@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Falling Notes Mode</title>
+    <link rel="stylesheet" href="../../assets/styles/main.css">
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        canvas {
+            border: 1px solid #000;
+            background-color: #fff;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Falling Notes Test</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <button id="startGameBtn">开始游戏</button>
+
+    <script src="test_falling_notes.js"></script>
+</body>
+
+</html>

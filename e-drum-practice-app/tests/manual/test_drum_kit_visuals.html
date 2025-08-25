@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鼓组打击效果测试</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+
+        canvas {
+            border: 1px solid #333;
+            background-color: #fff;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>鼓组打击效果测试</h1>
+    <canvas id="drumCanvas" width="800" height="600"></canvas>
+    <div class="controls">
+        <button id="kick">底鼓 (K)</button>
+        <button id="snare">军鼓 (S)</button>
+        <button id="hihat">踩镲 (H)</button>
+        <button id="hihatOpen">开镲 (O)</button>
+        <button id="crash">吊镲 (C)</button>
+        <button id="ride">叮叮镲 (R)</button>
+        <button id="tom1">高音桶鼓 (T1)</button>
+        <button id="tom2">中音桶鼓 (T2)</button>
+        <button id="floorTom">落地桶鼓 (F)</button>
+    </div>
+
+    <script src="test_drum_kit_visuals.js"></script>
+</body>
+
+</html>

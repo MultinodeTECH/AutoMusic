@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VexFlow Scrolling Test</title>
+    <link rel="stylesheet" href="../../assets/styles/main.css">
+    <style>
+        #score-canvas {
+            background-color: white;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>VexFlow Scrolling Test</h1>
+    <div id="controls">
+        <button id="startBtn">Start Scrolling</button>
+        <button id="stopBtn">Stop Scrolling</button>
+        <button id="resetBtn">Reset</button>
+    </div>
+    <div id="score-container">
+        <canvas id="score-canvas" width="800" height="250"></canvas>
+    </div>
+
+    <!-- VexFlow Library -->
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.0/build/cjs/vexflow.js"></script>
+
+    <!-- Score Data -->
+    <!-- <script type="module" src="../../scores/basic_rock_1.js"></script> -->
+
+    <!-- Main Logic -->
+    <script type="module" src="test_vexflow_scrolling.js"></script>
+</body>
+
+</html>

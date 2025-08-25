@@ -1,45 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>E-Drum Practice App</title>
-    <link rel="stylesheet" href="style.css">
+    <title>VexFlow Local Test with Manual Input</title>
+    <link rel="stylesheet" href="assets/styles/main.css">
 </head>
 
 <body>
-    <header id="status-bar">
-        <div id="midi-status">Status: Disconnected</div>
-        <select id="midi-devices" aria-label="Select MIDI Device"></select>
-        <button id="connect-btn">Connect</button>
-        <button id="start-game-btn" style="display: none;">Start Game</button>
-        <a href="practice_mode_2.html" id="mode-2-link" class="button">练习模式 2 (引导球)</a>
+
+    <header>
+        <h1>E-Drum Practice App</h1>
+        <div id="controls">
+            <button id="scroll-mode-btn">滚动模式</button>
+            <button id="falling-mode-btn">下落模式</button>
+            <button id="start-stop-btn">开始/停止</button>
+        </div>
     </header>
 
-    <main id="game-container">
-        <div id="score-display">
-            <span id="score">0</span>
-            <span id="combo"></span>
-        </div>
-        <div id="renderer-area">
-            <!-- Falling notes will be rendered here (e.g., inside a <canvas>) -->
-            <div id="hit-zone"></div>
-        </div>
+    <main>
+        <div id="game-container"></div>
     </main>
 
-    <footer id="virtual-drum-kit">
-        <div class="drum-pad" id="pad-kick" data-note="36">Kick</div>
-        <div class="drum-pad" id="pad-snare" data-note="38">Snare</div>
-        <div class="drum-pad" id="pad-hihat" data-note="42">Hi-Hat</div>
-        <div class="drum-pad" id="pad-hihat-open" data-note="46">Open Hi-Hat</div>
-        <div class="drum-pad" id="pad-crash" data-note="49">Crash</div>
-        <div class="drum-pad" id="pad-ride" data-note="51">Ride</div>
-        <div class="drum-pad" id="pad-tom-high" data-note="48">High Tom</div>
-        <div class="drum-pad" id="pad-tom-mid" data-note="45">Mid Tom</div>
-        <div class="drum-pad" id="pad-tom-low" data-note="43">Low Tom</div>
+    <footer>
+        <p id="status">Welcome!</p>
     </footer>
-    <script src="src/main.js" type="module"></script>
+
+    <script type="module" src="src/main.js"></script>
 </body>
 
 </html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VexFlow Playback Scrolling Score Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        #score-canvas {
+            border: 1px solid black;
+            margin-top: 20px;
+        }
+
+        .controls button {
+            font-size: 16px;
+            padding: 8px 16px;
+            margin: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>VexFlow Playback Scrolling Score</h1>
+    <p>Demonstrates a smooth, BPM-based scrolling score with a fixed cursor.</p>
+    <div class="controls">
+        <button id="play-btn">Play</button>
+        <button id="stop-btn">Stop</button>
+        <button id="reset-btn">Reset</button>
+    </div>
+    <canvas id="score-canvas" width="800" height="250"></canvas>
+
+    <!-- VexFlow library -->
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.0/build/cjs/vexflow.js"></script>
+
+    <!-- Custom script -->
+    <script src="playback_scrolling_score.js"></script>
+</body>
+
+</html>

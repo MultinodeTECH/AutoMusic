@@ -1,4 +1,4 @@
-import { eventBus } from './event_bus.js';
+import { eventBus } from '../event_bus.js';
 
 const UIView = {
     // DOM Element Cache

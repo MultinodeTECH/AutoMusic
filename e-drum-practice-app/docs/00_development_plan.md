@@ -70,3 +70,20 @@ Once the core features are stable, we can consider adding the following advanced
 *   **More Game Modes:** Such as a free-play mode, rhythm challenges, etc.
 
 This plan provides a clear blueprint for the project. I suggest we start by focusing on Phase 2: Core Practice Engine.
+
+## 6. How to Run
+
+This application is a static web page that requires a simple local HTTP server to run correctly due to browser security policies (e.g., for loading local files via AJAX).
+
+### On Windows
+
+1.  Ensure you have Python installed.
+2.  Double-click the `run.bat` file.
+3.  This will start a local server. Open your web browser and navigate to `http://localhost:8000`.
+
+### On macOS / Linux
+
+1.  Ensure you have Python installed.
+2.  Open a terminal in the project's root directory.
+3.  Run the command: `sh ./run.sh`
+4.  This will start a local server. Open your web browser and navigate to `http://localhost:8000`.

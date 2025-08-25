@@ -1,0 +1,94 @@
+ <!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>VexFlow Local Test with Manual Input</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        #output {
+            border: 1px solid #ccc;
+            margin-top: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 80px;
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>VexFlow Local Test with Manual Input</h1>
+    <p>
+        This page loads VexFlow from your local <code>node_modules</code> directory.
+        Enter notes in the VexFlow EasyScore format below and click "Render Score".
+    </p>
+
+    <div id="controls">
+        <label for="notes-input">Enter Notes:</label>
+        <textarea id="notes-input">C5/q, C5/q, C5/q, C5/q</textarea>
+        <button id="render-button">Render Score</button>
+    </div>
+
+    <div id="output"></div>
+
+    <script type="module">
+        // Import VexFlow using a bare module specifier.
+        // This relies on the local dev server (like Vite) to resolve the path to node_modules.
+        import { Factory, EasyScore, System, VexFlow } from 'vexflow';
+
+        const outputDiv = document.getElementById('output');
+        const notesInput = document.getElementById('notes-input');
+        const renderButton = document.getElementById('render-button');
+
+        async function renderScore(notesString) {
+            try {
+                // Clear previous score
+                outputDiv.innerHTML = '';
+
+                // Wait for fonts to load.
+                await VexFlow.loadFonts('Bravura', 'Academico');
+                VexFlow.setFonts('Bravura', 'Academico');
+
+                const vf = new Factory({
+                    renderer: { elementId: 'output', width: 500, height: 200 },
+                });
+
+                const score = vf.EasyScore();
+                const system = vf.System();
+
+                system.addStave({
+                    voices: [
+                        score.voice(score.notes(notesString, { stem: 'up' })),
+                    ],
+                }).addClef('percussion').addTimeSignature('4/4');
+
+                vf.draw();
+                console.log('Score rendered successfully.');
+            } catch (error) {
+                console.error('Error rendering score:', error);
+                outputDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        renderButton.addEventListener('click', () => {
+            renderScore(notesInput.value);
+        });
+
+        // Initial render on page load
+        renderScore(notesInput.value);
+    </script>
+</body>
+
+</html>

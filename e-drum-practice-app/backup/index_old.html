@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Drum Practice App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <header id="status-bar">
+        <div id="midi-status">Status: Disconnected</div>
+        <select id="midi-devices" aria-label="Select MIDI Device"></select>
+        <button id="connect-btn">Connect</button>
+        <button id="start-game-btn" style="display: none;">Start Game</button>
+        <a href="practice_mode_2.html" id="mode-2-link" class="button">练习模式 2 (引导球)</a>
+    </header>
+
+    <main id="game-container">
+        <div id="score-display">
+            <span id="score">0</span>
+            <span id="combo"></span>
+        </div>
+        <div id="renderer-area">
+            <!-- Falling notes will be rendered here (e.g., inside a <canvas>) -->
+            <div id="hit-zone"></div>
+        </div>
+    </main>
+
+    <footer id="virtual-drum-kit">
+        <div class="drum-pad" id="pad-kick" data-note="36">Kick</div>
+        <div class="drum-pad" id="pad-snare" data-note="38">Snare</div>
+        <div class="drum-pad" id="pad-hihat" data-note="42">Hi-Hat</div>
+        <div class="drum-pad" id="pad-hihat-open" data-note="46">Open Hi-Hat</div>
+        <div class="drum-pad" id="pad-crash" data-note="49">Crash</div>
+        <div class="drum-pad" id="pad-ride" data-note="51">Ride</div>
+        <div class="drum-pad" id="pad-tom-high" data-note="48">High Tom</div>
+        <div class="drum-pad" id="pad-tom-mid" data-note="45">Mid Tom</div>
+        <div class="drum-pad" id="pad-tom-low" data-note="43">Low Tom</div>
+    </footer>
+    <script src="src/main.js" type="module"></script>
+</body>
+
+</html>
