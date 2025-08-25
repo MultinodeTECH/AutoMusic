@@ -34,6 +34,7 @@
 <body>
     <h1>Drum Practice V3</h1>
     <div id="controls">
+        <button id="playBtn">Play</button>
         <button id="resetBtn">Reset</button>
         <label for="score-select">选择乐谱:</label>
         <select id="score-select">
@@ -72,6 +73,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             // --- DOM Elements ---
+            const playBtn = document.getElementById('playBtn');
             const resetBtn = document.getElementById('resetBtn');
             const scoreSelect = document.getElementById('score-select');
             const bpmSlider = document.getElementById('bpm-slider');
@@ -102,6 +104,10 @@
             let timeoutId = null;
             let currentTargetNote = null;
             let stats = { totalNotes: 0, hits: 0, misses: 0, extras: 0, score: 0 };
+
+            // --- Realtime Transcription State ---
+            let isRecording = false;
+            let lastHitTime = 0;
 
 
             // --- Score Library ---
@@ -185,10 +191,12 @@
 
             // --- MusicXML Generation (for user score) ---
             function generateMusicXML(notes = [], measureCount = 1) {
-                const divisions = 1; // Each quarter note is 1 division
-                const maxTicksPerMeasure = 4; // 4/4 time
+                const divisions = 4; // 16th note is the smallest unit
+                const maxTicksPerMeasure = 16; // 4/4 time, 4 * 4 = 16
 
-                const typeToDuration = { 'quarter': 1 };
+                const typeToDuration = {
+                    'whole': 16, 'half': 8, 'quarter': 4, 'eighth': 2, '16th': 1
+                };
 
                 let measures = [];
                 let currentMeasureTicks = 0;
@@ -257,12 +265,36 @@
                     </score-partwise>`;
             }
 
+            function quantizeDuration(deltaTime, bpm) {
+                const quarterNoteDuration = (60 / bpm) * 1000;
+                const noteTypes = {
+                    'whole': quarterNoteDuration * 4,
+                    'half': quarterNoteDuration * 2,
+                    'quarter': quarterNoteDuration,
+                    'eighth': quarterNoteDuration / 2,
+                    '16th': quarterNoteDuration / 4,
+                };
+
+                let closestType = 'quarter';
+                let smallestDifference = Math.abs(deltaTime - noteTypes['quarter']);
+
+                for (const type in noteTypes) {
+                    const difference = Math.abs(deltaTime - noteTypes[type]);
+                    if (difference < smallestDifference) {
+                        smallestDifference = difference;
+                        closestType = type;
+                    }
+                }
+                console.log(`Quantized: ${deltaTime.toFixed(2)}ms -> ${closestType}`);
+                return closestType;
+            }
+
 
             // --- Score Loading and Rendering ---
             async function loadTargetScore() {
                 const selectedScore = scoreSelect.value;
                 const xml = scoreLibrary[selectedScore];
-                
+
                 // Simple way to count notes for stats, might need improvement for complex scores
                 stats.totalNotes = (xml.match(/<note>/g) || []).length - (xml.match(/<rest\/>/g) || []).length;
 
@@ -299,7 +331,7 @@
                     showResults();
                     return;
                 }
-                
+
                 osmdTarget.cursor.next(); // Move cursor first
                 const note = osmdTarget.cursor.Iterator.CurrentNote;
 
@@ -317,34 +349,42 @@
                         playNextNote();
                     }, noteDurationMs);
                 } else {
-                     // Handle rests or end of score
+                    // Handle rests or end of score
                     currentTargetNote = null;
                     const bpm = parseInt(bpmSlider.value, 10);
                     const quarterNoteDurationMs = (60 / bpm) * 1000;
-                     timeoutId = setTimeout(playNextNote, quarterNoteDurationMs); // Assume rest is a quarter note
+                    timeoutId = setTimeout(playNextNote, quarterNoteDurationMs); // Assume rest is a quarter note
                 }
             }
 
             // --- User Input ---
             function handleHit() {
-                if (currentTargetNote && !currentTargetNote.hit) {
-                    // Hit
-                    console.log("Hit!");
-                    stats.hits++;
-                    stats.score += 10;
-                    updateScore();
-                    currentTargetNote.hit = true; // Mark as hit
-                    osmdTarget.EngravingRules.setNoteColor(currentTargetNote.sourceNote, "green");
-                    osmdTarget.render();
-                    userNotes.push({ type: 'quarter', color: '#008000' }); // green
+                const now = performance.now();
+
+                if (!isRecording) {
+                    // First hit of the session
+                    isRecording = true;
+                    lastHitTime = now;
+                    console.log("Recording started...");
+                    // Add a placeholder note immediately for instant feedback
+                    userNotes.push({ type: '16th' });
                 } else {
-                    // Extra hit (no target note or already hit)
-                    console.log("Extra hit!");
-                    stats.extras++;
-                    stats.score = Math.max(0, stats.score - 2);
-                    updateScore();
-                    userNotes.push({ type: 'quarter', color: 'orange' });
+                    // Subsequent hits
+                    const deltaTime = now - lastHitTime;
+                    lastHitTime = now;
+
+                    const bpm = parseInt(bpmSlider.value, 10);
+                    const lastNoteType = quantizeDuration(deltaTime, bpm);
+
+                    // Update the previous note with its correct duration
+                    if (userNotes.length > 0) {
+                        userNotes[userNotes.length - 1].type = lastNoteType;
+                    }
+
+                    // Add the new placeholder note for the current hit
+                    userNotes.push({ type: '16th' });
                 }
+
                 loadUserScore();
             }
 
@@ -392,6 +432,8 @@
 
                 // Reset user score
                 userNotes = [];
+                isRecording = false;
+                lastHitTime = 0;
                 loadUserScore();
 
                 // Reset target score (reload to clear colors and custom properties)
