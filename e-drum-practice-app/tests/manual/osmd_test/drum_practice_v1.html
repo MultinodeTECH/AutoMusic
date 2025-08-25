@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drum Practice V1</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+        }
+
+        .score-container {
+            width: 45%;
+            border: 1px solid black;
+            margin: 10px;
+        }
+
+        #controls {
+            margin: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Drum Practice V1</h1>
+    <div id="controls">
+        <button id="playBtn">Play</button>
+        <button id="resetBtn">Reset</button>
+        <label for="bpmInput">BPM:</label>
+        <input type="number" id="bpmInput" value="80">
+    </div>
+    <div class="container">
+        <div id="osmd-target-container" class="score-container">
+            <h2>Target Score</h2>
+        </div>
+        <div id="osmd-user-container" class="score-container">
+            <h2>Your Score (Press Space)</h2>
+        </div>
+    </div>
+
+    <!-- OSMD Library -->
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@latest/build/opensheetmusicdisplay.min.js"></script>
+
+    <!-- Main Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const playBtn = document.getElementById('playBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const bpmInput = document.getElementById('bpmInput');
+            const targetContainer = document.getElementById('osmd-target-container');
+            const userContainer = document.getElementById('osmd-user-container');
+
+            // --- OSMD Instances ---
+            const osmdTarget = new opensheetmusicdisplay.OpenSheetMusicDisplay(targetContainer, {
+                backend: "svg",
+                drawingParameters: "compact",
+            });
+            const osmdUser = new opensheetmusicdisplay.OpenSheetMusicDisplay(userContainer, {
+                backend: "svg",
+                drawingParameters: "compact",
+            });
+
+            // --- State Management ---
+            let userNotes = [];
+            let isPlaying = false;
+            let timeoutId = null;
+
+            // --- MusicXML Generation ---
+            function generateMusicXML(notes = [], measureCount = 1) {
+                const divisions = 1; // Each quarter note is 1 division
+                const maxTicksPerMeasure = 4; // 4/4 time
+
+                const typeToDuration = { 'quarter': 1 };
+
+                let measures = [];
+                let currentMeasureTicks = 0;
+                let currentMeasureNotes = '';
+
+                const attributes = `
+                    <attributes>
+                        <divisions>${divisions}</divisions>
+                        <key><fifths>0</fifths></key>
+                        <time><beats>4</beats><beat-type>4</beat-type></time>
+                        <clef><sign>percussion</sign></clef>
+                    </attributes>`;
+
+                for (const note of notes) {
+                    const durationTicks = typeToDuration[note.type] || 1;
+
+                    if (currentMeasureTicks >= maxTicksPerMeasure) {
+                        measures.push(currentMeasureNotes);
+                        currentMeasureNotes = '';
+                        currentMeasureTicks = 0;
+                    }
+
+                    currentMeasureNotes += `
+                        <note>
+                            <unpitched>
+                                <display-step>C</display-step>
+                                <display-octave>5</display-octave>
+                            </unpitched>
+                            <duration>${durationTicks}</duration>
+                            <voice>1</voice>
+                            <type>${note.type}</type>
+                            <stem>up</stem>
+                            <notehead>x</notehead>
+                        </note>`;
+                    currentMeasureTicks += durationTicks;
+                }
+
+                if (currentMeasureTicks > 0) {
+                    if (currentMeasureTicks < maxTicksPerMeasure) {
+                        const restTicks = maxTicksPerMeasure - currentMeasureTicks;
+                        currentMeasureNotes += `<note><rest/><duration>${restTicks}</duration></note>`;
+                    }
+                    measures.push(currentMeasureNotes);
+                }
+
+                while (measures.length < measureCount) {
+                    measures.push(`<note><rest/><duration>${maxTicksPerMeasure}</duration></note>`);
+                }
+
+                let measuresXml = '';
+                measures.forEach((measureNotes, index) => {
+                    measuresXml += `
+                        <measure number="${index + 1}">
+                            ${index === 0 ? attributes : ''}
+                            ${measureNotes}
+                        </measure>`;
+                });
+
+                return `<?xml version="1.0" encoding="UTF-8"?>
+                    <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+                    <score-partwise version="3.1">
+                        <part-list><score-part id="P1"><part-name>Drums</part-name></score-part></part-list>
+                        <part id="P1">${measuresXml}</part>
+                    </score-partwise>`;
+            }
+
+            // --- Score Loading and Rendering ---
+            async function loadTargetScore() {
+                const targetNotes = [
+                    { type: 'quarter' }, { type: 'quarter' },
+                    { type: 'quarter' }, { type: 'quarter' }
+                ];
+                const xml = generateMusicXML(targetNotes, 1);
+                await osmdTarget.load(xml);
+                osmdTarget.render();
+                osmdTarget.cursor.show();
+            }
+
+            async function loadUserScore() {
+                const xml = generateMusicXML(userNotes, 1);
+                await osmdUser.load(xml);
+                osmdUser.render();
+            }
+
+            // --- Playback Logic ---
+            function playNextNote() {
+                if (!isPlaying) return;
+
+                if (osmdTarget.cursor.Iterator.EndReached) {
+                    isPlaying = false;
+                    playBtn.textContent = "Play";
+                    osmdTarget.cursor.reset();
+                    return;
+                }
+
+                const note = osmdTarget.cursor.Iterator.CurrentNote;
+                const duration = note ? note.Length.RealValue : 0.25;
+                const bpm = parseInt(bpmInput.value, 10);
+                const quarterNoteDurationMs = (60 / bpm) * 1000;
+                const noteDurationMs = quarterNoteDurationMs * (duration * 4);
+
+                timeoutId = setTimeout(() => {
+                    osmdTarget.cursor.next();
+                    playNextNote();
+                }, noteDurationMs);
+            }
+
+            // --- User Input ---
+            function handleUserHit() {
+                userNotes.push({ type: 'quarter' });
+                loadUserScore();
+            }
+
+            // --- Controls ---
+            function handlePlay() {
+                isPlaying = !isPlaying;
+                if (isPlaying) {
+                    playBtn.textContent = "Pause";
+                    playNextNote();
+                } else {
+                    playBtn.textContent = "Play";
+                    clearTimeout(timeoutId);
+                }
+            }
+
+            function handleReset() {
+                // Stop playback
+                isPlaying = false;
+                playBtn.textContent = "Play";
+                clearTimeout(timeoutId);
+
+                // Reset target score cursor
+                osmdTarget.cursor.reset();
+
+                // Reset user score
+                userNotes = [];
+                loadUserScore();
+            }
+
+            // --- Event Listeners ---
+            playBtn.addEventListener('click', handlePlay);
+            resetBtn.addEventListener('click', handleReset);
+            window.addEventListener('keydown', (event) => {
+                if (event.code === 'Space') {
+                    event.preventDefault();
+                    handleUserHit();
+                }
+            });
+
+            // --- Initialization ---
+            async function initialize() {
+                await loadTargetScore();
+                await loadUserScore();
+                console.log("Application initialized.");
+            }
+
+            initialize();
+        });
+    </script>
+</body>
+
+</html>

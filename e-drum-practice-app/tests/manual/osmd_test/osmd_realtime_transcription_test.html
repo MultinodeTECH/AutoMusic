@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSMD 实时鼓谱记录</title>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+
+        #osmd-container {
+            width: 800px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>实时鼓谱记录测试</h1>
+    <p>请按空格键向乐谱添加军鼓音符。第一次按键将开始录制。</p>
+    <div id="controls">
+        <button id="resetBtn">重置</button>
+        <div style="margin-top: 10px;">
+            <label for="bpmInput">BPM:</label>
+            <input type="number" id="bpmInput" value="120" min="30" max="300">
+        </div>
+    </div>
+    <div id="osmd-container"></div>
+
+    <!-- OSMD Library -->
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@latest/build/opensheetmusicdisplay.min.js"></script>
+
+    <!-- Main Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const osmdContainer = document.getElementById('osmd-container');
+            const resetBtn = document.getElementById('resetBtn');
+            const bpmInput = document.getElementById('bpmInput');
+
+            const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(osmdContainer, {
+                backend: "svg",
+                drawTitle: true,
+                drawingParameters: "compact",
+                drawPartNames: false,
+                percussionClef: true,
+            });
+
+            // --- 状态管理 ---
+            let isRecording = false;
+            let lastHitTime = 0;
+            let recordedNotes = [];
+
+            /**
+             * 根据音符数组生成MusicXML字符串。
+             * @param {Array} notes - 包含音符类型信息的对象数组。
+             * @returns {string} MusicXML 字符串。
+             */
+            function generateMusicXML(notes = []) {
+                const divisions = 4; // 每个四分音符的ticks数，4代表16分音符是最小单位
+                const maxTicksPerMeasure = 16; // 4/4拍，每个小节有16个16分音符的ticks
+
+                const typeToDuration = {
+                    'whole': 16, 'half': 8, 'quarter': 4, 'eighth': 2, '16th': 1
+                };
+
+                let measures = [];
+                let currentMeasureTicks = 0;
+                let currentMeasureNotes = '';
+
+                // 添加乐谱属性到第一个小节
+                const attributes = `
+            <attributes>
+                <divisions>${divisions}</divisions>
+                <key><fifths>0</fifths></key>
+                <time><beats>4</beats><beat-type>4</beat-type></time>
+                <clef><sign>percussion</sign></clef>
+            </attributes>`;
+
+                for (const note of notes) {
+                    const durationTicks = typeToDuration[note.type] || 4; // 默认为4分音符
+
+                    if (currentMeasureTicks + durationTicks > maxTicksPerMeasure) {
+                        // 当前小节满了，需要填充休止符并开启新小节
+                        if (currentMeasureTicks < maxTicksPerMeasure) {
+                            const restTicks = maxTicksPerMeasure - currentMeasureTicks;
+                            currentMeasureNotes += `<note><rest/><duration>${restTicks}</duration></note>`;
+                        }
+                        measures.push(currentMeasureNotes);
+                        currentMeasureNotes = '';
+                        currentMeasureTicks = 0;
+                    }
+
+                    currentMeasureNotes += `
+            <note>
+                <unpitched>
+                    <display-step>C</display-step>
+                    <display-octave>5</display-octave>
+                </unpitched>
+                <duration>${durationTicks}</duration>
+                <instrument id="P1-I36"/>
+                <voice>1</voice>
+                <type>${note.type}</type>
+                <stem>up</stem>
+                <notehead>x</notehead>
+            </note>`;
+                    currentMeasureTicks += durationTicks;
+                }
+
+                // 将最后一个正在构建的小节加入
+                if (currentMeasureTicks > 0) {
+                     if (currentMeasureTicks < maxTicksPerMeasure) {
+                        const restTicks = maxTicksPerMeasure - currentMeasureTicks;
+                        currentMeasureNotes += `<note><rest/><duration>${restTicks}</duration></note>`;
+                    }
+                    measures.push(currentMeasureNotes);
+                }
+
+                // 确保至少有6个小节，不足的用空白小节填充
+                while (measures.length < 6) {
+                    measures.push(`<note><rest/><duration>${maxTicksPerMeasure}</duration></note>`);
+                }
+
+                let measuresXml = '';
+                measures.forEach((measureNotes, index) => {
+                    measuresXml += `
+        <measure number="${index + 1}">
+            ${index === 0 ? attributes : ''}
+            ${measureNotes}
+        </measure>`;
+                });
+
+                return `
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+    <score-partwise version="3.1">
+        <part-list>
+            <score-part id="P1">
+                <part-name>Snare Drum</part-name>
+                <score-instrument id="P1-I36">
+                    <instrument-name>Snare</instrument-name>
+                </score-instrument>
+            </score-part>
+        </part-list>
+        <part id="P1">
+            ${measuresXml}
+        </part>
+    </score-partwise>`;
+            }
+
+            /**
+             * 加载并渲染乐谱
+             */
+            function loadAndRenderScore() {
+                const xmlString = generateMusicXML(recordedNotes); // Pass recorded notes
+                osmd.load(xmlString)
+                    .then(() => {
+                        osmd.render();
+                        console.log("乐谱已更新。");
+                    })
+                    .catch((error) => {
+                        console.error("加载或渲染乐谱时出错:", error);
+                    });
+            }
+
+            /**
+             * 重置所有状态并重新渲染空白乐谱
+             */
+            function reset() {
+                isRecording = false;
+                lastHitTime = 0;
+                recordedNotes = [];
+                console.log("状态已重置。");
+                loadAndRenderScore(); // This will now correctly call the single function
+            }
+
+            // --- 事件监听 ---
+            window.addEventListener('keydown', (event) => {
+                if (event.code === 'Space') {
+                    event.preventDefault(); // 防止页面滚动
+                    handleHit();
+                }
+            });
+
+            resetBtn.addEventListener('click', reset);
+
+            /**
+             * 将毫秒时长量化为最接近的音符类型
+             * @param {number} deltaTime - 毫秒为单位的时间间隔
+             * @param {number} bpm - 每分钟节拍数
+             * @returns {string} MusicXML 的音符类型 (e.g., 'quarter', 'eighth')
+             */
+            function quantizeDuration(deltaTime, bpm) {
+                const quarterNoteDuration = (60 / bpm) * 1000;
+                
+                const noteTypes = {
+                    'whole': quarterNoteDuration * 4,
+                    'half': quarterNoteDuration * 2,
+                    'quarter': quarterNoteDuration,
+                    'eighth': quarterNoteDuration / 2,
+                    '16th': quarterNoteDuration / 4,
+                };
+
+                let closestType = 'quarter';
+                let smallestDifference = Math.abs(deltaTime - noteTypes['quarter']);
+
+                for (const type in noteTypes) {
+                    const difference = Math.abs(deltaTime - noteTypes[type]);
+                    if (difference < smallestDifference) {
+                        smallestDifference = difference;
+                        closestType = type;
+                    }
+                }
+                console.log(`量化结果: ${deltaTime.toFixed(2)}ms -> ${closestType}`);
+                return closestType;
+            }
+
+            function handleHit() {
+                const now = performance.now();
+
+                if (!isRecording) {
+                    isRecording = true;
+                    lastHitTime = now;
+                    console.log("录制开始...");
+                    // 这是第一次敲击，我们只记录时间，不产生音符
+                    return;
+                }
+
+                const deltaTime = now - lastHitTime;
+                lastHitTime = now;
+
+                const bpm = parseInt(bpmInput.value, 10);
+                const noteType = quantizeDuration(deltaTime, bpm);
+
+                recordedNotes.push({ type: noteType });
+                loadAndRenderScore();
+            }
+            
+            // --- 初始化 ---
+            reset(); // 初始加载
+
+        });
+    </script>
+</body>
+
+</html>

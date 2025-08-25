@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drum Practice V3</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+        }
+
+        .score-container {
+            width: 45%;
+            border: 1px solid black;
+            margin: 10px;
+        }
+
+        #controls {
+            margin: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Drum Practice V3</h1>
+    <div id="controls">
+        <button id="resetBtn">Reset</button>
+        <label for="score-select">选择乐谱:</label>
+        <select id="score-select">
+            <option value="simple_quarter_notes">简单四分音符</option>
+            <option value="basic_rock_beat">基础摇滚节奏</option>
+            <option value="funky_beat">放克节奏</option>
+        </select>
+        <label for="bpm-slider">BPM: <span id="bpm-value">80</span></label>
+        <input type="range" id="bpm-slider" min="40" max="200" value="80">
+    </div>
+    <div class="container">
+        <div id="osmd-target-container" class="score-container">
+            <h2>Target Score</h2>
+        </div>
+        <div id="osmd-user-container" class="score-container">
+            <h2>Your Score (Press Space)</h2>
+        </div>
+    </div>
+
+    <div id="score-container">
+        <h2>分数: <span id="score-display">0</span></h2>
+        <div id="results-summary" style="display: none;">
+            <h3>练习报告</h3>
+            <p>总音符数: <span id="total-notes">0</span></p>
+            <p>命中: <span id="hits">0</span></p>
+            <p>错过: <span id="misses">0</span></p>
+            <p>误击: <span id="extras">0</span></p>
+            <p>准确率: <span id="accuracy">0%</span></p>
+        </div>
+    </div>
+
+    <!-- OSMD Library -->
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@latest/build/opensheetmusicdisplay.min.js"></script>
+
+    <!-- Main Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const resetBtn = document.getElementById('resetBtn');
+            const scoreSelect = document.getElementById('score-select');
+            const bpmSlider = document.getElementById('bpm-slider');
+            const bpmValue = document.getElementById('bpm-value');
+            const targetContainer = document.getElementById('osmd-target-container');
+            const userContainer = document.getElementById('osmd-user-container');
+            const scoreDisplay = document.getElementById('score-display');
+            const resultsSummary = document.getElementById('results-summary');
+            const totalNotesEl = document.getElementById('total-notes');
+            const hitsEl = document.getElementById('hits');
+            const missesEl = document.getElementById('misses');
+            const extrasEl = document.getElementById('extras');
+            const accuracyEl = document.getElementById('accuracy');
+
+            // --- OSMD Instances ---
+            const osmdTarget = new opensheetmusicdisplay.OpenSheetMusicDisplay(targetContainer, {
+                backend: "svg",
+                drawingParameters: "compact",
+            });
+            const osmdUser = new opensheetmusicdisplay.OpenSheetMusicDisplay(userContainer, {
+                backend: "svg",
+                drawingParameters: "compact",
+            });
+
+            // --- State Management ---
+            let userNotes = [];
+            let isPlaying = false;
+            let timeoutId = null;
+            let currentTargetNote = null;
+            let stats = { totalNotes: 0, hits: 0, misses: 0, extras: 0, score: 0 };
+
+
+            // --- Score Library ---
+            const scoreLibrary = {
+                simple_quarter_notes: `<?xml version="1.0" encoding="UTF-8"?>
+                    <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+                    <score-partwise version="3.1">
+                      <part-list>
+                        <score-part id="P1">
+                          <part-name>Drums</part-name>
+                        </score-part>
+                      </part-list>
+                      <part id="P1">
+                        <measure number="1">
+                          <attributes>
+                            <divisions>1</divisions>
+                            <key><fifths>0</fifths></key>
+                            <time><beats>4</beats><beat-type>4</beat-type></time>
+                            <clef><sign>percussion</sign></clef>
+                          </attributes>
+                          <note><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>1</duration><type>quarter</type><stem>up</stem><notehead>x</notehead></note>
+                          <note><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>1</duration><type>quarter</type><stem>up</stem><notehead>x</notehead></note>
+                          <note><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>1</duration><type>quarter</type><stem>up</stem><notehead>x</notehead></note>
+                          <note><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>1</duration><type>quarter</type><stem>up</stem><notehead>x</notehead></note>
+                        </measure>
+                      </part>
+                    </score-partwise>`,
+                basic_rock_beat: `<?xml version="1.0" encoding="UTF-8"?>
+                    <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+                    <score-partwise version="3.1">
+                      <part-list>
+                        <score-part id="P1"><part-name>Drums</part-name></score-part>
+                      </part-list>
+                      <part id="P1">
+                        <measure number="1">
+                          <attributes>
+                            <divisions>2</divisions>
+                            <key><fifths>0</fifths></key>
+                            <time><beats>4</beats><beat-type>4</beat-type></time>
+                            <clef><sign>percussion</sign></clef>
+                          </attributes>
+                          <note> <unpitched><display-step>G</display-step><display-octave>4</display-octave></unpitched> <duration>1</duration> <voice>1</voice> <type>eighth</type> <stem>up</stem> <notehead>x</notehead> </note>
+                          <note> <unpitched><display-step>C</display-step><display-octave>4</display-octave></unpitched> <duration>1</duration> <voice>2</voice> <type>eighth</type> <stem>down</stem> </note>
+                          <note> <unpitched><display-step>G</display-step><display-octave>4</display-octave></unpitched> <duration>1</duration> <voice>1</voice> <type>eighth</type> <stem>up</stem> <notehead>x</notehead> </note>
+                          <note> <unpitched><display-step>E</display-step><display-octave>4</display-octave></unpitched> <duration>1</duration> <voice>2</voice> <type>eighth</type> <stem>down</stem> </note>
+                          <note> <unpitched><display-step>G</display-step><display-octave>4</display-octave></unpitched> <duration>1</duration> <voice>1</voice> <type>eighth</type> <stem>up</stem> <notehead>x</notehead> </note>
+                          <note> <unpitched><display-step>C</display-step><display-octave>4</display-octave></unpitched> <duration>1</duration> <voice>2</voice> <type>eighth</type> <stem>down</stem> </note>
+                          <note> <unpitched><display-step>G</display-step><display-octave>4</display-octave></unpitched> <duration>1</duration> <voice>1</voice> <type>eighth</type> <stem>up</stem> <notehead>x</notehead> </note>
+                          <note> <unpitched><display-step>E</display-step><display-octave>4</display-octave></unpitched> <duration>1</duration> <voice>2</voice> <type>eighth</type> <stem>down</stem> </note>
+                        </measure>
+                      </part>
+                    </score-partwise>`,
+                funky_beat: `<?xml version="1.0" encoding="UTF-8"?>
+                    <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+                    <score-partwise version="3.1">
+                      <part-list>
+                        <score-part id="P1"><part-name>Drums</part-name></score-part>
+                      </part-list>
+                      <part id="P1">
+                        <measure number="1">
+                          <attributes>
+                            <divisions>4</divisions>
+                            <key><fifths>0</fifths></key>
+                            <time><beats>4</beats><beat-type>4</beat-type></time>
+                            <clef><sign>percussion</sign></clef>
+                          </attributes>
+                          <note><unpitched><display-step>G</display-step><display-octave>4</display-octave></unpitched><duration>1</duration><voice>1</voice><type>16th</type><stem>up</stem><notehead>x</notehead></note>
+                          <note><unpitched><display-step>C</display-step><display-octave>4</display-octave></unpitched><duration>1</duration><voice>2</voice><type>16th</type><stem>down</stem></note>
+                          <note><unpitched><display-step>G</display-step><display-octave>4</display-octave></unpitched><duration>1</duration><voice>1</voice><type>16th</type><stem>up</stem><notehead>x</notehead></note>
+                          <note><rest/><duration>1</duration><voice>1</voice><type>16th</type></note>
+                          <note><unpitched><display-step>E</display-step><display-octave>4</display-octave></unpitched><duration>2</duration><voice>2</voice><type>eighth</type><stem>down</stem></note>
+                          <note><unpitched><display-step>G</display-step><display-octave>4</display-octave></unpitched><duration>2</duration><voice>1</voice><type>eighth</type><stem>up</stem><notehead>x</notehead></note>
+                          <note><unpitched><display-step>C</display-step><display-octave>4</display-octave></unpitched><duration>2</duration><voice>2</voice><type>eighth</type><stem>down</stem></note>
+                          <note><unpitched><display-step>G</display-step><display-octave>4</display-octave></unpitched><duration>2</duration><voice>1</voice><type>eighth</type><stem>up</stem><notehead>x</notehead></note>
+                          <note><unpitched><display-step>E</display-step><display-octave>4</display-octave></unpitched><duration>2</duration><voice>2</voice><type>eighth</type><stem>down</stem></note>
+                          <note><unpitched><display-step>G</display-step><display-octave>4</display-octave></unpitched><duration>2</duration><voice>1</voice><type>eighth</type><stem>up</stem><notehead>x</notehead></note>
+                        </measure>
+                      </part>
+                    </score-partwise>`
+            };
+
+            // --- MusicXML Generation (for user score) ---
+            function generateMusicXML(notes = [], measureCount = 1) {
+                const divisions = 1; // Each quarter note is 1 division
+                const maxTicksPerMeasure = 4; // 4/4 time
+
+                const typeToDuration = { 'quarter': 1 };
+
+                let measures = [];
+                let currentMeasureTicks = 0;
+                let currentMeasureNotes = '';
+
+                const attributes = `
+                    <attributes>
+                        <divisions>${divisions}</divisions>
+                        <key><fifths>0</fifths></key>
+                        <time><beats>4</beats><beat-type>4</beat-type></time>
+                        <clef><sign>percussion</sign></clef>
+                    </attributes>`;
+
+                for (const note of notes) {
+                    const durationTicks = typeToDuration[note.type] || 1;
+
+                    if (currentMeasureTicks >= maxTicksPerMeasure) {
+                        measures.push(currentMeasureNotes);
+                        currentMeasureNotes = '';
+                        currentMeasureTicks = 0;
+                    }
+
+                    const colorXml = note.color ? `<color>${note.color}</color>` : '';
+                    currentMeasureNotes += `
+                        <note>
+                            <unpitched>
+                                <display-step>C</display-step>
+                                <display-octave>5</display-octave>
+                            </unpitched>
+                            <duration>${durationTicks}</duration>
+                            <voice>1</voice>
+                            <type>${note.type}</type>
+                            <stem>up</stem>
+                            <notehead>x</notehead>
+                            ${colorXml}
+                        </note>`;
+                    currentMeasureTicks += durationTicks;
+                }
+
+                if (currentMeasureTicks > 0) {
+                    if (currentMeasureTicks < maxTicksPerMeasure) {
+                        const restTicks = maxTicksPerMeasure - currentMeasureTicks;
+                        currentMeasureNotes += `<note><rest/><duration>${restTicks}</duration></note>`;
+                    }
+                    measures.push(currentMeasureNotes);
+                }
+
+                while (measures.length < measureCount) {
+                    measures.push(`<note><rest/><duration>${maxTicksPerMeasure}</duration></note>`);
+                }
+
+                let measuresXml = '';
+                measures.forEach((measureNotes, index) => {
+                    measuresXml += `
+                        <measure number="${index + 1}">
+                            ${index === 0 ? attributes : ''}
+                            ${measureNotes}
+                        </measure>`;
+                });
+
+                return `<?xml version="1.0" encoding="UTF-8"?>
+                    <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+                    <score-partwise version="3.1">
+                        <part-list><score-part id="P1"><part-name>Drums</part-name></score-part></part-list>
+                        <part id="P1">${measuresXml}</part>
+                    </score-partwise>`;
+            }
+
+
+            // --- Score Loading and Rendering ---
+            async function loadTargetScore() {
+                const selectedScore = scoreSelect.value;
+                const xml = scoreLibrary[selectedScore];
+                
+                // Simple way to count notes for stats, might need improvement for complex scores
+                stats.totalNotes = (xml.match(/<note>/g) || []).length - (xml.match(/<rest\/>/g) || []).length;
+
+                await osmdTarget.load(xml);
+                osmdTarget.render();
+                osmdTarget.cursor.show();
+            }
+
+            async function loadUserScore() {
+                const xml = generateMusicXML(userNotes, 1);
+                await osmdUser.load(xml);
+                osmdUser.render();
+            }
+
+            // --- Playback Logic ---
+            function playNextNote() {
+                if (!isPlaying) return;
+
+                // Before moving to the next note, check if the current one was missed
+                if (currentTargetNote && !currentTargetNote.hit) {
+                    console.log("Missed note:", currentTargetNote);
+                    stats.misses++;
+                    stats.score = Math.max(0, stats.score - 5);
+                    updateScore();
+                    osmdTarget.EngravingRules.setNoteColor(currentTargetNote.sourceNote, "red");
+                    osmdTarget.render();
+                }
+
+                if (osmdTarget.cursor.Iterator.EndReached) {
+                    isPlaying = false;
+                    playBtn.textContent = "Play";
+                    osmdTarget.cursor.reset();
+                    currentTargetNote = null;
+                    showResults();
+                    return;
+                }
+                
+                osmdTarget.cursor.next(); // Move cursor first
+                const note = osmdTarget.cursor.Iterator.CurrentNote;
+
+                if (note) {
+                    currentTargetNote = note;
+                    console.log("Current target note:", currentTargetNote);
+
+                    const duration = note.Length.RealValue;
+                    const bpm = parseInt(bpmSlider.value, 10);
+                    const quarterNoteDurationMs = (60 / bpm) * 1000;
+                    const noteDurationMs = quarterNoteDurationMs * (duration * 4);
+
+                    timeoutId = setTimeout(() => {
+                        currentTargetNote = null; // Note is no longer active
+                        playNextNote();
+                    }, noteDurationMs);
+                } else {
+                     // Handle rests or end of score
+                    currentTargetNote = null;
+                    const bpm = parseInt(bpmSlider.value, 10);
+                    const quarterNoteDurationMs = (60 / bpm) * 1000;
+                     timeoutId = setTimeout(playNextNote, quarterNoteDurationMs); // Assume rest is a quarter note
+                }
+            }
+
+            // --- User Input ---
+            function handleHit() {
+                if (currentTargetNote && !currentTargetNote.hit) {
+                    // Hit
+                    console.log("Hit!");
+                    stats.hits++;
+                    stats.score += 10;
+                    updateScore();
+                    currentTargetNote.hit = true; // Mark as hit
+                    osmdTarget.EngravingRules.setNoteColor(currentTargetNote.sourceNote, "green");
+                    osmdTarget.render();
+                    userNotes.push({ type: 'quarter', color: '#008000' }); // green
+                } else {
+                    // Extra hit (no target note or already hit)
+                    console.log("Extra hit!");
+                    stats.extras++;
+                    stats.score = Math.max(0, stats.score - 2);
+                    updateScore();
+                    userNotes.push({ type: 'quarter', color: 'orange' });
+                }
+                loadUserScore();
+            }
+
+            // --- Scoring ---
+            function updateScore() {
+                scoreDisplay.textContent = stats.score;
+            }
+
+            // --- Results ---
+            function showResults() {
+                totalNotesEl.textContent = stats.totalNotes;
+                hitsEl.textContent = stats.hits;
+                missesEl.textContent = stats.misses;
+                extrasEl.textContent = stats.extras;
+                const accuracy = stats.totalNotes > 0 ? (stats.hits / stats.totalNotes) * 100 : 0;
+                accuracyEl.textContent = `${accuracy.toFixed(1)}%`;
+                resultsSummary.style.display = 'block';
+            }
+
+            // --- Controls ---
+            function handlePlay() {
+                isPlaying = !isPlaying;
+                if (isPlaying) {
+                    playBtn.textContent = "Pause";
+                    // Reset cursor to start before playing
+                    osmdTarget.cursor.reset();
+                    playNextNote();
+                } else {
+                    playBtn.textContent = "Play";
+                    clearTimeout(timeoutId);
+                }
+            }
+
+            function handleReset() {
+                // Stop playback
+                isPlaying = false;
+                playBtn.textContent = "Play";
+                clearTimeout(timeoutId);
+                currentTargetNote = null;
+
+                // Reset stats and score display
+                stats = { totalNotes: 0, hits: 0, misses: 0, extras: 0, score: 0 };
+                updateScore();
+                resultsSummary.style.display = 'none';
+
+                // Reset user score
+                userNotes = [];
+                loadUserScore();
+
+                // Reset target score (reload to clear colors and custom properties)
+                loadTargetScore();
+            }
+
+            // --- Event Listeners ---
+            playBtn.addEventListener('click', handlePlay);
+            resetBtn.addEventListener('click', handleReset);
+            scoreSelect.addEventListener('change', handleReset); // Reset when score changes
+
+            bpmSlider.addEventListener('input', () => {
+                bpmValue.textContent = bpmSlider.value;
+            });
+
+            window.addEventListener('keydown', (event) => {
+                if (event.code === 'Space') {
+                    event.preventDefault();
+                    handleHit();
+                }
+            });
+
+            // --- Initialization ---
+            async function initialize() {
+                await loadTargetScore();
+                await loadUserScore();
+                console.log("Application initialized.");
+            }
+
+            initialize();
+        });
+    </script>
+</body>
+
+</html>

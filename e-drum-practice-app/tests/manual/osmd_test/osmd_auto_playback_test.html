@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSMD Auto Playback Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+
+        #osmd-container {
+            width: 800px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>OSMD Auto Playback Test</h1>
+    <div id="controls">
+        <button id="autoPlayBtn">Play/Pause</button>
+        <button id="stopBtn">Reset</button>
+        <button id="hitBtn">Simulate Hit</button>
+        <div style="margin-top: 10px;">
+            <label for="bpmInput">BPM:</label>
+            <input type="number" id="bpmInput" value="120" min="30" max="300">
+        </div>
+    </div>
+    <div id="osmd-container"></div>
+
+    <!-- OSMD Library -->
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@latest/build/opensheetmusicdisplay.min.js"></script>
+
+    <!-- Main Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const osmdContainer = document.getElementById('osmd-container');
+            const autoPlayBtn = document.getElementById('autoPlayBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const bpmInput = document.getElementById('bpmInput');
+
+            const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(osmdContainer, {
+                backend: "svg",
+                drawTitle: true,
+                drawingParameters: "compact", // or "default", "leadsheet", "thumbnail"
+                drawPartNames: false,
+                percussionClef: true,
+                // Add other OSMD options here
+            });
+
+            osmd.load("simple_drum.xml")
+                .then(() => {
+                    osmd.render();
+                    console.log("Score loaded and rendered successfully.");
+                    osmd.cursor.show(); // Show the cursor
+                    // The way to iterate through notes is different in newer OSMD versions.
+                    // The following is a placeholder for the correct iteration logic.
+                    // A proper implementation would involve getting the iterator from the cursor
+                    // and manually advancing it. The addIteratorCallback is not a function.
+                    console.log("OSMD cursor is ready. Note iteration logic needs to be updated for the current OSMD version.");
+                })
+                .catch((error) => {
+                    console.error("Error loading or rendering score:", error);
+                });
+
+            let currentNote = null;
+            let isPlaying = false;
+            let timeoutId = null;
+
+            function playNextNote() {
+                if (!isPlaying) return;
+
+                // 1. Check for end of score
+                if (osmd.cursor.Iterator.EndReached) {
+                    console.log("End of score reached.");
+                    isPlaying = false;
+                    autoPlayBtn.textContent = "Play";
+                    osmd.cursor.reset();
+                    currentNote = null;
+                    return;
+                }
+
+                // 2. Process the CURRENT note(s) at the cursor position
+                const voiceEntries = osmd.cursor.Iterator.currentVoiceEntries;
+                let noteDuration = 0;
+                currentNote = null; // Reset current note
+
+                // Find the first valid note to determine the duration for the timeout
+                for (const entry of voiceEntries) {
+                    if (entry.Notes && entry.Notes.length > 0) {
+                        const note = entry.Notes[0];
+                        if (note && note.Length) {
+                            currentNote = note; // Set the representative note for this timestamp
+                            noteDuration = note.Length.RealValue;
+                            break; // Exit after finding the first note
+                        }
+                    }
+                }
+                
+                console.log(`Processing timestamp. Note found: ${!!currentNote}, Duration to wait: ${noteDuration}`);
+                console.log("Full VoiceEntries object:", voiceEntries);
+
+
+                // 3. Calculate delay based on the found note's duration (or a default for rests)
+                const bpm = parseInt(bpmInput.value, 10);
+                const quarterNoteDurationMs = (60 / bpm) * 1000;
+                
+                // If it's a rest (noteDuration is 0), we still need to advance.
+                // We'll use the smallest possible duration from the score divisions.
+                let stepDuration = noteDuration;
+                if (stepDuration === 0) {
+                    // Attempt to get duration from the iterator's timestamp
+                    if (osmd.cursor.Iterator.currentMeasure) {
+                       stepDuration = 1 / osmd.sheet.SourceMeasures[osmd.cursor.Iterator.currentMeasureIndex].Duration.denominator;
+                    } else {
+                       stepDuration = 0.25; // fallback to a quarter note if measure info is not available
+                    }
+                     console.log(`No note found. Assuming rest with duration: ${stepDuration}`);
+                }
+                const noteDurationMs = quarterNoteDurationMs * (stepDuration * 4);
+
+
+                // 4. Schedule the NEXT action (move cursor and play next note)
+                timeoutId = setTimeout(() => {
+                    osmd.cursor.next(); // Advance the cursor *after* the current note's duration has passed
+                    playNextNote();     // Recursively call the function for the new position
+                }, noteDurationMs);
+            }
+
+            function advanceAndPlay() {
+                // This function is now just a wrapper to start the new logic
+                playNextNote();
+            }
+
+            autoPlayBtn.addEventListener('click', () => {
+                isPlaying = !isPlaying;
+                if (isPlaying) {
+                    autoPlayBtn.textContent = "Pause";
+                    console.log("Playback started.");
+                    advanceAndPlay(); // Just kick off the unified loop.
+                } else {
+                    autoPlayBtn.textContent = "Play";
+                    clearTimeout(timeoutId);
+                    console.log("Playback paused.");
+                }
+            });
+
+            stopBtn.addEventListener('click', () => {
+                clearTimeout(timeoutId);
+                isPlaying = false;
+                osmd.cursor.reset();
+                currentNote = null;
+                console.log("Playback stopped and cursor reset.");
+            });
+
+            document.getElementById('hitBtn').addEventListener('click', () => {
+                if (currentNote) {
+                    console.log(`SUCCESS: Hit registered for note ${currentNote.sourceNote.voiceEntry.notes[0].sourceNote.pitch.step}.`);
+                    osmd.EngravingRules.setNoteColor(currentNote.sourceNote, "green");
+                    osmd.render();
+                } else {
+                    console.log("FAIL: Hit registered, but no note was active.");
+                }
+            });
+
+            // Add a function to handle misses, which we can call later
+            function handleMiss() {
+                if (currentNote) {
+                    console.log(`MISS: No hit registered for note ${currentNote.sourceNote.voiceEntry.notes[0].sourceNote.pitch.step}.`);
+                    osmd.EngravingRules.setNoteColor(currentNote.sourceNote, "red");
+                    osmd.render();
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>
