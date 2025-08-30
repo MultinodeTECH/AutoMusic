@@ -1,4 +1,4 @@
-import { domElements, updateScore, showResults } from './ui.js';
+import { domElements, updateScore, showResults, showFeedback } from './ui.js';
 import { scoreLibrary } from './config.js';
 
 // --- OSMD Instances ---
@@ -6,10 +6,14 @@ let osmdTarget;
 let osmdUser;
 
 // --- State Management ---
+const MAX_ERROR_WINDOW = 200; // ms
+let accuracyHistory = [];
+
 let userNotes = [];
 let isPlaying = false;
 let timeoutId = null;
 let currentTargetNote = null;
+let nextTargetNoteIdealHitTime = 0;
 let stats = { totalNotes: 0, hits: 0, misses: 0, extras: 0, score: 0 };
 let metronome;
  
@@ -172,13 +176,22 @@ async function loadUserScore() {
 }
 
 // --- Playback Logic ---
+function calculateAverageAccuracy() {
+   if (accuracyHistory.length === 0) return 0;
+   const sum = accuracyHistory.reduce((a, b) => a + b, 0);
+   return Math.round(sum / accuracyHistory.length);
+}
+
 function playNextNote() {
     if (!isPlaying) return;
 
     if (currentTargetNote && !currentTargetNote.hit) {
         stats.misses++;
-        stats.score = Math.max(0, stats.score - 5);
-        updateScore(stats);
+        // A miss is a 0 accuracy event
+        accuracyHistory.push(0);
+        updateScore({ score: calculateAverageAccuracy() });
+        currentTargetNote.NoteheadColor = "#FF0000"; // Red
+        osmdTarget.render();
     }
 
     while (osmdTarget.cursor.NotesUnderCursor().length === 0 && !osmdTarget.cursor.Iterator.EndReached) {
@@ -187,7 +200,6 @@ function playNextNote() {
 
     if (osmdTarget.cursor.Iterator.EndReached) {
         osmdTarget.cursor.reset();
-        // Immediately schedule the next note to play from the beginning
         timeoutId = setTimeout(playNextNote, 0);
         return;
     }
@@ -198,17 +210,20 @@ function playNextNote() {
         playNextNote();
         return;
     }
-    const note = notes[0];
-    currentTargetNote = note;
-    metronome.play();
- 
-     const duration = note.Length.RealValue;
-     const bpm = parseInt(domElements.bpmSlider.value, 10);
+    
+    currentTargetNote = notes[0];
+    currentTargetNote.idealHitTime = performance.now();
+    
+    const duration = currentTargetNote.Length.RealValue;
+    const bpm = parseInt(domElements.bpmSlider.value, 10);
     const quarterNoteDurationMs = (60 / bpm) * 1000;
     const noteDurationMs = quarterNoteDurationMs * duration * 4;
 
+    nextTargetNoteIdealHitTime = currentTargetNote.idealHitTime + noteDurationMs;
+
+    metronome.play();
+ 
     timeoutId = setTimeout(() => {
-        currentTargetNote = null;
         osmdTarget.cursor.next();
         playNextNote();
     }, noteDurationMs);
@@ -216,6 +231,76 @@ function playNextNote() {
 
 // --- User Input ---
 export function handleHit() {
+    const hitTime = performance.now();
+
+    if (currentTargetNote) {
+        const idealTime = currentTargetNote.idealHitTime;
+        const timeDiff = hitTime - idealTime; // Positive if late, negative if early
+        const absDiff = Math.abs(timeDiff);
+
+        let accuracyScore = 0;
+        if (absDiff <= MAX_ERROR_WINDOW) {
+            accuracyScore = 100 * (1 - absDiff / MAX_ERROR_WINDOW);
+        }
+
+        // --- DETAILED DEBUG LOGGING ---
+        console.log("--- HIT ANALYSIS ---");
+        console.log(`User Hit Time: ${hitTime.toFixed(2)}ms`);
+        console.log(`Expected Note Time: ${idealTime.toFixed(2)}ms`);
+        console.log(`Time Difference: ${timeDiff.toFixed(2)}ms (${timeDiff > 0 ? 'Late' : 'Early'})`);
+        console.log(`Max Error Window: ${MAX_ERROR_WINDOW}ms`);
+        
+        if (absDiff <= MAX_ERROR_WINDOW) {
+            console.log("Result: HIT");
+            console.log(`Score Calculation: 100 * (1 - ${absDiff.toFixed(2)} / ${MAX_ERROR_WINDOW}) = ${accuracyScore.toFixed(2)}`);
+        } else {
+            console.log("Result: MISS (Outside error window)");
+            console.log("Score Calculation: 0 (Time difference exceeds max error window)");
+        }
+        console.log("--------------------");
+        // --- END DEBUG LOGGING ---
+
+        accuracyHistory.push(accuracyScore);
+
+        if (absDiff <= MAX_ERROR_WINDOW) {
+            if (!currentTargetNote.hit) {
+                stats.hits++;
+                currentTargetNote.hit = true;
+
+                if (accuracyScore > 90) {
+                    showFeedback("Perfect!", "#FFD700"); // Gold
+                    currentTargetNote.NoteheadColor = "#00FF00"; // Green
+                } else if (accuracyScore > 70) {
+                    showFeedback("Good!", "#00FF00"); // Green
+                    currentTargetNote.NoteheadColor = "#ADFF2F"; // GreenYellow
+                } else {
+                    showFeedback("OK", "#FFFFFF"); // White
+                    currentTargetNote.NoteheadColor = "#FFFF00"; // Yellow
+                }
+            }
+        } else {
+             // This logic branch is for hits that are clearly early or late for the current note
+             if (timeDiff < 0) {
+                showFeedback("Early!", "#00BFFF"); // DeepSkyBlue
+             } else {
+                showFeedback("Late!", "#FF4500"); // OrangeRed
+             }
+        }
+        
+        osmdTarget.render();
+        updateScore({ score: calculateAverageAccuracy() });
+
+    } else {
+        stats.extras++;
+        showFeedback("Extra!", "#808080"); // Gray
+        console.log("--- HIT ANALYSIS ---");
+        console.log("User hit, but NO expected note.");
+        console.log("Result: EXTRA");
+        console.log("--------------------");
+    }
+
+    // The transcription logic can remain as is, or be modified separately.
+    // For now, we keep it.
     const now = performance.now();
 
     if (!isRecording) {
@@ -256,11 +341,10 @@ export function handleHit() {
                 userNotes = [];
                 completedMeasures = 0;
                 currentMeasureTicks = 0;
-                // Per user feedback, add a new placeholder after reset
                 userNotes.push({ type: '16th' });
                 loadUserScore();
             }, 100);
-            return; // Exit before adding the next placeholder note
+            return;
         }
 
         userNotes.push({ type: '16th' }); // Add next placeholder
@@ -288,9 +372,11 @@ export function handleReset() {
     domElements.playBtn.textContent = "Play";
     clearTimeout(timeoutId);
     currentTargetNote = null;
+    nextTargetNoteIdealHitTime = 0;
 
     stats = { totalNotes: 0, hits: 0, misses: 0, extras: 0, score: 0 };
-    updateScore(stats);
+    accuracyHistory = [];
+    updateScore({ score: 0 });
     domElements.resultsSummary.style.display = 'none';
 
     userNotes = [];
@@ -308,10 +394,12 @@ export async function initialize() {
     osmdTarget = new opensheetmusicdisplay.OpenSheetMusicDisplay(domElements.targetContainer, {
         backend: "svg",
         drawingParameters: "compact",
+        drawCursor: true,
     });
     osmdUser = new opensheetmusicdisplay.OpenSheetMusicDisplay(domElements.userContainer, {
         backend: "svg",
         drawingParameters: "compact",
+        drawCursor: true,
     });
  
     metronome = new Metronome();

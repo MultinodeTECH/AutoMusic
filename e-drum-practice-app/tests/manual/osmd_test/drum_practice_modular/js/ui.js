@@ -16,7 +16,8 @@ export const domElements = {
 };
 
 export function updateScore(stats) {
-    domElements.scoreDisplay.textContent = stats.score;
+   // Now expects stats.score to be the average accuracy
+   domElements.scoreDisplay.textContent = `${stats.score}%`;
 }
 
 export function showResults(stats) {
@@ -24,7 +25,18 @@ export function showResults(stats) {
     domElements.hitsEl.textContent = stats.hits;
     domElements.missesEl.textContent = stats.misses;
     domElements.extrasEl.textContent = stats.extras;
-    const accuracy = stats.totalNotes > 0 ? (stats.hits / stats.totalNotes) * 100 : 0;
-    domElements.accuracyEl.textContent = `${accuracy.toFixed(1)}%`;
+    domElements.accuracyEl.textContent = `${Math.round(stats.averageAccuracy)}%`;
     domElements.resultsSummary.style.display = 'block';
+}
+
+export function showFeedback(text, color) {
+    const feedbackContainer = document.getElementById('feedback-container');
+    if (feedbackContainer) {
+        feedbackContainer.textContent = text;
+        feedbackContainer.style.color = color;
+        feedbackContainer.classList.add('show');
+        setTimeout(() => {
+            feedbackContainer.classList.remove('show');
+        }, 500);
+    }
 }

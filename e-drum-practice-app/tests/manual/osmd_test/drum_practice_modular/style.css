@@ -21,3 +21,25 @@ body {
 #controls {
     margin: 20px;
 }
+
+.vf-cursor {
+    stroke: #3399FF;
+    stroke-width: 3px;
+}
+#feedback-container {
+    position: absolute;
+    top: 200px; /* Adjust as needed */
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2em;
+    font-weight: bold;
+    color: #FFD700; /* Gold color */
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.5s ease-out;
+    pointer-events: none; /* Prevents it from interfering with mouse events */
+}
+
+#feedback-container.show {
+    opacity: 1;
+}
