@@ -15,6 +15,8 @@ let stats = { totalNotes: 0, hits: 0, misses: 0, extras: 0, score: 0 };
 // --- Realtime Transcription State ---
 let isRecording = false;
 let lastHitTime = 0;
+let completedMeasures = 0;
+let currentMeasureTicks = 0;
 
 // --- MusicXML Generation (for user score) ---
 function generateMusicXML(notes = [], measureCount = 1) {
@@ -191,34 +193,46 @@ export function handleHit() {
             handlePlay();
         }
 
-        userNotes.push({ type: '16th' });
+        userNotes.push({ type: '16th' }); // First placeholder
     } else {
         const deltaTime = now - lastHitTime;
         lastHitTime = now;
 
         const bpm = parseInt(domElements.bpmSlider.value, 10);
-        const lastNoteType = quantizeDuration(deltaTime, bpm);
+        const noteType = quantizeDuration(deltaTime, bpm);
 
         if (userNotes.length > 0) {
-            userNotes[userNotes.length - 1].type = lastNoteType;
+            userNotes[userNotes.length - 1].type = noteType;
+
+            const typeToDuration = { 'whole': 16, 'half': 8, 'quarter': 4, 'eighth': 2, '16th': 1 };
+            const maxTicksPerMeasure = 16;
+            const durationTicks = typeToDuration[noteType] || 0;
+            currentMeasureTicks += durationTicks;
+
+            while (currentMeasureTicks >= maxTicksPerMeasure) {
+                completedMeasures++;
+                currentMeasureTicks -= maxTicksPerMeasure;
+            }
         }
 
-        userNotes.push({ type: '16th' });
+        if (completedMeasures >= 3) {
+            console.log("Three measures filled. Resetting user score.");
+            loadUserScore(); // Render the final state before reset
+            setTimeout(() => {
+                userNotes = [];
+                completedMeasures = 0;
+                currentMeasureTicks = 0;
+                // Per user feedback, add a new placeholder after reset
+                userNotes.push({ type: '16th' });
+                loadUserScore();
+            }, 100);
+            return; // Exit before adding the next placeholder note
+        }
+
+        userNotes.push({ type: '16th' }); // Add next placeholder
     }
 
     loadUserScore();
-
-    const typeToDuration = { 'whole': 16, 'half': 8, 'quarter': 4, 'eighth': 2, '16th': 1 };
-    const maxTicksPerMeasure = 16;
-    const totalTicks = userNotes.reduce((sum, note) => sum + (typeToDuration[note.type] || 0), 0);
-
-    if (totalTicks >= maxTicksPerMeasure * 3) {
-        console.log("Three measures filled. Resetting user score.");
-        setTimeout(() => {
-            userNotes = [];
-            loadUserScore();
-        }, 100);
-    }
 }
 
 // --- Controls ---
@@ -248,6 +262,8 @@ export function handleReset() {
     userNotes = [];
     isRecording = false;
     lastHitTime = 0;
+    completedMeasures = 0;
+    currentMeasureTicks = 0;
     loadUserScore();
 
     loadTargetScore();
