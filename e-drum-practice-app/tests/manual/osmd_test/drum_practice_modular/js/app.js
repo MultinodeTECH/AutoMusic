@@ -11,9 +11,43 @@ let isPlaying = false;
 let timeoutId = null;
 let currentTargetNote = null;
 let stats = { totalNotes: 0, hits: 0, misses: 0, extras: 0, score: 0 };
+let metronome;
+ 
+class Metronome {
+    constructor(audioContext) {
+        this.audioCtx = audioContext || this._createContext();
+        this.isPlaying = false;
+        this.frequency = 880;
+        this.duration = 0.05;
+    }
 
-// --- Realtime Transcription State ---
-let isRecording = false;
+    _createContext() {
+        if (window.AudioContext || window.webkitAudioContext) {
+            return new (window.AudioContext || window.webkitAudioContext)();
+        } else {
+            console.error("Web Audio API is not supported in this browser.");
+            return null;
+        }
+    }
+
+    play() {
+        if (!this.audioCtx) return;
+        const oscillator = this.audioCtx.createOscillator();
+        const gainNode = this.audioCtx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioCtx.destination);
+
+        oscillator.frequency.setValueAtTime(this.frequency, this.audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(1, this.audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + this.duration);
+
+        oscillator.start(this.audioCtx.currentTime);
+        oscillator.stop(this.audioCtx.currentTime + this.duration);
+    }
+}
+ // --- Realtime Transcription State ---
+ let isRecording = false;
 let lastHitTime = 0;
 let completedMeasures = 0;
 let currentMeasureTicks = 0;
@@ -153,9 +187,8 @@ function playNextNote() {
 
     if (osmdTarget.cursor.Iterator.EndReached) {
         osmdTarget.cursor.reset();
-        const bpm = parseInt(domElements.bpmSlider.value, 10);
-        const quarterNoteDurationMs = (60 / bpm) * 1000;
-        timeoutId = setTimeout(playNextNote, quarterNoteDurationMs / 4);
+        // Immediately schedule the next note to play from the beginning
+        timeoutId = setTimeout(playNextNote, 0);
         return;
     }
 
@@ -167,9 +200,10 @@ function playNextNote() {
     }
     const note = notes[0];
     currentTargetNote = note;
-
-    const duration = note.Length.RealValue;
-    const bpm = parseInt(domElements.bpmSlider.value, 10);
+    metronome.play();
+ 
+     const duration = note.Length.RealValue;
+     const bpm = parseInt(domElements.bpmSlider.value, 10);
     const quarterNoteDurationMs = (60 / bpm) * 1000;
     const noteDurationMs = quarterNoteDurationMs * duration * 4;
 
@@ -279,9 +313,10 @@ export async function initialize() {
         backend: "svg",
         drawingParameters: "compact",
     });
-
-    await loadTargetScore();
-    osmdTarget.cursor.hide();
+ 
+    metronome = new Metronome();
+     await loadTargetScore();
+     osmdTarget.cursor.hide();
     await loadUserScore();
     console.log("Application initialized.");
 }
