@@ -1,0 +1,23 @@
+body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.container {
+    display: flex;
+    flex-direction: column; /* Changed from row to column */
+    align-items: center; /* Center items vertically */
+    width: 100%;
+}
+
+.score-container {
+    width: 90%; /* Adjusted width for vertical layout */
+    border: 1px solid black;
+    margin: 10px;
+}
+
+#controls {
+    margin: 20px;
+}

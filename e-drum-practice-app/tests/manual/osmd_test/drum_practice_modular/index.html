@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drum Practice Modular</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <h1>Drum Practice V3</h1>
+    <div id="controls">
+        <button id="playBtn">Play</button>
+        <button id="resetBtn">Reset</button>
+        <label for="score-select">选择乐谱:</label>
+        <select id="score-select">
+            <option value="simple_quarter_notes">简单四分音符</option>
+            <option value="basic_rock_beat">基础摇滚节奏</option>
+            <option value="funky_beat">放克节奏</option>
+        </select>
+        <label for="bpm-slider">BPM: <span id="bpm-value">80</span></label>
+        <input type="range" id="bpm-slider" min="40" max="200" value="80">
+    </div>
+    <div class="container">
+        <div id="osmd-target-container" class="score-container">
+            <h2>Coach Drum</h2>
+        </div>
+        <div id="osmd-user-container" class="score-container">
+            <h2>Practice</h2>
+        </div>
+    </div>
+
+    <div id="score-container">
+        <h2>分数: <span id="score-display">0</span></h2>
+        <div id="results-summary" style="display: none;">
+            <h3>练习报告</h3>
+            <p>总音符数: <span id="total-notes">0</span></p>
+            <p>命中: <span id="hits">0</span></p>
+            <p>错过: <span id="misses">0</span></p>
+            <p>误击: <span id="extras">0</span></p>
+            <p>准确率: <span id="accuracy">0%</span></p>
+        </div>
+    </div>
+
+    <!-- OSMD Library -->
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@latest/build/opensheetmusicdisplay.min.js"></script>
+
+    <!-- Main Logic -->
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>

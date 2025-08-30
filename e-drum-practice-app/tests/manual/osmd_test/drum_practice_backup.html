@@ -15,13 +15,12 @@
 
         .container {
             display: flex;
-            flex-direction: column; /* Changed from row to column */
-            align-items: center; /* Center items vertically */
+            justify-content: space-around;
             width: 100%;
         }
 
         .score-container {
-            width: 90%; /* Adjusted width for vertical layout */
+            width: 45%;
             border: 1px solid black;
             margin: 10px;
         }
@@ -48,10 +47,10 @@
     </div>
     <div class="container">
         <div id="osmd-target-container" class="score-container">
-            <h2>Coach Drum</h2>
+            <h2>Target Score</h2>
         </div>
         <div id="osmd-user-container" class="score-container">
-            <h2>Practice</h2>
+            <h2>Your Score (Press Space)</h2>
         </div>
     </div>
 
@@ -305,7 +304,7 @@
             }
 
             async function loadUserScore() {
-                const xml = generateMusicXML(userNotes, 3); // Always generate 3 measures
+                const xml = generateMusicXML(userNotes, 1);
                 await osmdUser.load(xml);
                 osmdUser.render();
             }
@@ -400,20 +399,6 @@
                 }
 
                 loadUserScore();
-
-                // --- Loop Logic ---
-                const typeToDuration = { 'whole': 16, 'half': 8, 'quarter': 4, 'eighth': 2, '16th': 1 };
-                const maxTicksPerMeasure = 16;
-                const totalTicks = userNotes.reduce((sum, note) => sum + (typeToDuration[note.type] || 0), 0);
-
-                if (totalTicks >= maxTicksPerMeasure * 3) {
-                    console.log("Three measures filled. Resetting user score.");
-                    // Use a brief timeout to allow the user to see the full score before it resets
-                    setTimeout(() => {
-                        userNotes = [];
-                        loadUserScore();
-                    }, 100); // 100ms delay
-                }
             }
 
             // --- Scoring ---
