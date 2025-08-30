@@ -14,44 +14,44 @@ let isPlaying = false;
 let timeoutId = null;
 let currentTargetNote = null;
 let nextTargetNoteIdealHitTime = 0;
+let audioPerformanceOffset = 0; // To sync performance.now() with AudioContext time
 let stats = { totalNotes: 0, hits: 0, misses: 0, extras: 0, score: 0 };
 let metronome;
- 
+
+// A more precise Metronome using the Web Audio API's scheduler
 class Metronome {
     constructor(audioContext) {
-        this.audioCtx = audioContext || this._createContext();
-        this.isPlaying = false;
-        this.frequency = 880;
-        this.duration = 0.05;
+        this.audioCtx = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+        this.frequency = 880; // High pitch for clarity
+        this.duration = 0.05; // 50ms click
     }
 
-    _createContext() {
-        if (window.AudioContext || window.webkitAudioContext) {
-            return new (window.AudioContext || window.webkitAudioContext)();
-        } else {
-            console.error("Web Audio API is not supported in this browser.");
-            return null;
-        }
-    }
-
-    play() {
+    // This method schedules a click to happen at a precise time in the future.
+    // `time` is an absolute timestamp from the AudioContext's clock.
+    play(time) {
         if (!this.audioCtx) return;
+
+        // Resume context if it was suspended (e.g., by browser auto-play policy)
+        if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+        }
+
         const oscillator = this.audioCtx.createOscillator();
         const gainNode = this.audioCtx.createGain();
 
         oscillator.connect(gainNode);
         gainNode.connect(this.audioCtx.destination);
 
-        oscillator.frequency.setValueAtTime(this.frequency, this.audioCtx.currentTime);
-        gainNode.gain.setValueAtTime(1, this.audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + this.duration);
+        oscillator.frequency.setValueAtTime(this.frequency, time);
+        gainNode.gain.setValueAtTime(1, time);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, time + this.duration);
 
-        oscillator.start(this.audioCtx.currentTime);
-        oscillator.stop(this.audioCtx.currentTime + this.duration);
+        oscillator.start(time);
+        oscillator.stop(time + this.duration);
     }
 }
- // --- Realtime Transcription State ---
- let isRecording = false;
+// --- Realtime Transcription State ---
+let isRecording = false;
 let lastHitTime = 0;
 let completedMeasures = 0;
 let currentMeasureTicks = 0;
@@ -177,12 +177,12 @@ async function loadUserScore() {
 
 // --- Playback Logic ---
 function calculateAverageAccuracy() {
-   if (accuracyHistory.length === 0) return 0;
-   const sum = accuracyHistory.reduce((a, b) => a + b, 0);
-   return Math.round(sum / accuracyHistory.length);
+    if (accuracyHistory.length === 0) return 0;
+    const sum = accuracyHistory.reduce((a, b) => a + b, 0);
+    return Math.round(sum / accuracyHistory.length);
 }
 
-function playNextNote() {
+function playNextNote(callReason = 'scheduled') {
     if (!isPlaying) return;
 
     if (currentTargetNote && !currentTargetNote.hit) {
@@ -200,7 +200,7 @@ function playNextNote() {
 
     if (osmdTarget.cursor.Iterator.EndReached) {
         osmdTarget.cursor.reset();
-        timeoutId = setTimeout(playNextNote, 0);
+        timeoutId = setTimeout(() => playNextNote(), 0);
         return;
     }
 
@@ -210,10 +210,11 @@ function playNextNote() {
         playNextNote();
         return;
     }
-    
+
     currentTargetNote = notes[0];
-    currentTargetNote.idealHitTime = performance.now();
-    
+    // FIX: Use the scheduled time from the previous note's calculation to avoid timing drift.
+    currentTargetNote.idealHitTime = nextTargetNoteIdealHitTime;
+
     const duration = currentTargetNote.Length.RealValue;
     const bpm = parseInt(domElements.bpmSlider.value, 10);
     const quarterNoteDurationMs = (60 / bpm) * 1000;
@@ -221,81 +222,155 @@ function playNextNote() {
 
     nextTargetNoteIdealHitTime = currentTargetNote.idealHitTime + noteDurationMs;
 
-    metronome.play();
- 
+    // LOGGING: Log the scheduled vs actual metronome hit time.
+    const scheduledTime = currentTargetNote.idealHitTime;
+    const actualTime = performance.now();
+    const drift = actualTime - scheduledTime;
+
+    console.log(`--- PLAYBACK (${callReason}) ---`);
+    console.log(`Scheduled Time: ${scheduledTime.toFixed(2)}ms`);
+    console.log(`Actual Time:    ${actualTime.toFixed(2)}ms`);
+    if (callReason === 'scheduled') {
+        console.log(`Drift:          ${drift.toFixed(2)}ms`);
+    } else {
+        console.log(`Triggered Early By: ${(-drift).toFixed(2)}ms`);
+    }
+    console.log(`----------------`);
+
+    // FIX: Schedule the metronome click using the precise, calculated idealHitTime.
+    // We convert the performance.now() timestamp to the AudioContext's time domain.
+    // Convert the performance.now() based idealHitTime to the AudioContext's time domain.
+    const scheduledPlayTime = (currentTargetNote.idealHitTime + audioPerformanceOffset) / 1000;
+
+    // Ensure we don't schedule in the past. If we're late, play immediately.
+    const playTime = Math.max(metronome.audioCtx.currentTime, scheduledPlayTime);
+    metronome.play(playTime);
+
+    // FIX: Implement self-correcting timer to prevent rhythm drift.
+    const delay = nextTargetNoteIdealHitTime - performance.now();
     timeoutId = setTimeout(() => {
         osmdTarget.cursor.next();
         playNextNote();
-    }, noteDurationMs);
+    }, delay > 0 ? delay : 0);
 }
 
 // --- User Input ---
 export function handleHit() {
     const hitTime = performance.now();
 
+    // --- NEW LOGIC FOR FIRST HIT ---
+    // If playback hasn't started, this hit should start it and be judged against the first note.
+    if (!isPlaying) {
+        console.log("First hit detected. Starting playback and scoring immediately.");
+        handlePlay(); // This will set the first currentTargetNote and its idealHitTime
+
+        // After handlePlay, currentTargetNote is now set for the first note.
+        // We overwrite its idealHitTime with the actual first hit time to ensure the first hit is always "Perfect".
+        if (currentTargetNote) {
+            currentTargetNote.idealHitTime = hitTime;
+            // FIX: Recalculate the next note's ideal time based on this adjusted first hit to keep the timing chain consistent.
+            const duration = currentTargetNote.Length.RealValue;
+            const bpm = parseInt(domElements.bpmSlider.value, 10);
+            const quarterNoteDurationMs = (60 / bpm) * 1000;
+            const noteDurationMs = quarterNoteDurationMs * duration * 4;
+            nextTargetNoteIdealHitTime = currentTargetNote.idealHitTime + noteDurationMs;
+        }
+    }
+    // --- END NEW LOGIC ---
+
     if (currentTargetNote) {
-        const idealTime = currentTargetNote.idealHitTime;
-        const timeDiff = hitTime - idealTime; // Positive if late, negative if early
-        const absDiff = Math.abs(timeDiff);
+        // --- NEW ADVANCED SCORING LOGIC ---
+        const idealTimeCurrent = currentTargetNote.idealHitTime;
+        const diffCurrent = hitTime - idealTimeCurrent;
+        const absDiffCurrent = Math.abs(diffCurrent);
+
+        const idealTimeNext = nextTargetNoteIdealHitTime;
+        const diffNext = hitTime - idealTimeNext;
+        const absDiffNext = Math.abs(diffNext);
+
+        let targetNote, timeDiff, absDiff, wasEarlyHitOnNext;
+
+        // If the hit is closer to the next note AND it's not ridiculously early for the current note
+        if (absDiffNext < absDiffCurrent && diffCurrent > MAX_ERROR_WINDOW / 2) {
+            targetNote = null; // Placeholder for the next note
+            timeDiff = diffNext;
+            absDiff = absDiffNext;
+            wasEarlyHitOnNext = true;
+        } else {
+            targetNote = currentTargetNote;
+            timeDiff = diffCurrent;
+            absDiff = absDiffCurrent;
+            wasEarlyHitOnNext = false;
+        }
 
         let accuracyScore = 0;
+        // NEW: Fixed scoring based on accuracy tiers
         if (absDiff <= MAX_ERROR_WINDOW) {
-            accuracyScore = 100 * (1 - absDiff / MAX_ERROR_WINDOW);
+            const accuracyPercentage = 1 - (absDiff / MAX_ERROR_WINDOW);
+            if (accuracyPercentage > 0.9) {
+                accuracyScore = 100; // Perfect
+            } else if (accuracyPercentage > 0.7) {
+                accuracyScore = 80; // Good
+            } else {
+                accuracyScore = 60; // OK
+            }
         }
 
-        // --- DETAILED DEBUG LOGGING ---
         console.log("--- HIT ANALYSIS ---");
         console.log(`User Hit Time: ${hitTime.toFixed(2)}ms`);
-        console.log(`Expected Note Time: ${idealTime.toFixed(2)}ms`);
+        console.log(`Comparing against: Current (${idealTimeCurrent.toFixed(2)}ms) and Next (${idealTimeNext.toFixed(2)}ms)`);
+        console.log(`Selected Target: ${wasEarlyHitOnNext ? 'NEXT' : 'CURRENT'} Note`);
         console.log(`Time Difference: ${timeDiff.toFixed(2)}ms (${timeDiff > 0 ? 'Late' : 'Early'})`);
-        console.log(`Max Error Window: ${MAX_ERROR_WINDOW}ms`);
-        
+
         if (absDiff <= MAX_ERROR_WINDOW) {
             console.log("Result: HIT");
-            console.log(`Score Calculation: 100 * (1 - ${absDiff.toFixed(2)} / ${MAX_ERROR_WINDOW}) = ${accuracyScore.toFixed(2)}`);
-        } else {
-            console.log("Result: MISS (Outside error window)");
-            console.log("Score Calculation: 0 (Time difference exceeds max error window)");
-        }
-        console.log("--------------------");
-        // --- END DEBUG LOGGING ---
+            console.log(`Score: ${accuracyScore}`);
+            if (wasEarlyHitOnNext) {
+                // We are hitting the NEXT note early. We need to advance the cursor.
+                clearTimeout(timeoutId);
+                osmdTarget.cursor.next();
+                playNextNote('early_hit'); // This sets the new currentTargetNote
 
-        accuracyHistory.push(accuracyScore);
+                // Now, apply scoring to the NEW currentTargetNote
+                if (currentTargetNote && !currentTargetNote.hit) {
+                    stats.hits++;
+                    currentTargetNote.hit = true;
+                    currentTargetNote.NoteheadColor = "#00FF00"; // Green for early hit
+                    showFeedback("Perfect!", "#FFD700");
+                }
 
-        if (absDiff <= MAX_ERROR_WINDOW) {
-            if (!currentTargetNote.hit) {
-                stats.hits++;
-                currentTargetNote.hit = true;
-
-                if (accuracyScore > 90) {
-                    showFeedback("Perfect!", "#FFD700"); // Gold
-                    currentTargetNote.NoteheadColor = "#00FF00"; // Green
-                } else if (accuracyScore > 70) {
-                    showFeedback("Good!", "#00FF00"); // Green
-                    currentTargetNote.NoteheadColor = "#ADFF2F"; // GreenYellow
-                } else {
-                    showFeedback("OK", "#FFFFFF"); // White
-                    currentTargetNote.NoteheadColor = "#FFFF00"; // Yellow
+            } else {
+                // We are hitting the CURRENT note.
+                if (targetNote && !targetNote.hit) {
+                    stats.hits++;
+                    targetNote.hit = true;
+                    if (accuracyScore >= 100) {
+                        showFeedback("Perfect!", "#FFD700");
+                        targetNote.NoteheadColor = "#00FF00";
+                    } else if (accuracyScore >= 80) {
+                        showFeedback("Good!", "#00FF00");
+                        targetNote.NoteheadColor = "#ADFF2F";
+                    } else {
+                        showFeedback("OK", "#FFFFFF");
+                        targetNote.NoteheadColor = "#FFFF00";
+                    }
                 }
             }
         } else {
-             // This logic branch is for hits that are clearly early or late for the current note
-             if (timeDiff < 0) {
-                showFeedback("Early!", "#00BFFF"); // DeepSkyBlue
-             } else {
-                showFeedback("Late!", "#FF4500"); // OrangeRed
-             }
+            console.log("Result: MISS (Outside error window)");
+            console.log(`Score: ${accuracyScore}`);
         }
-        
+        console.log("--------------------");
+
+        accuracyHistory.push(accuracyScore);
         osmdTarget.render();
         updateScore({ score: calculateAverageAccuracy() });
 
-    } else {
+    } else if (isPlaying) {
         stats.extras++;
-        showFeedback("Extra!", "#808080"); // Gray
+        showFeedback("Extra!", "#808080");
         console.log("--- HIT ANALYSIS ---");
-        console.log("User hit, but NO expected note.");
-        console.log("Result: EXTRA");
+        console.log("User hit, but NO expected note. Result: EXTRA");
         console.log("--------------------");
     }
 
@@ -306,12 +381,7 @@ export function handleHit() {
     if (!isRecording) {
         isRecording = true;
         lastHitTime = now;
-        console.log("Recording started, triggering target score playback...");
-
-        if (!isPlaying) {
-            handlePlay();
-        }
-
+        console.log("Recording started.");
         userNotes.push({ type: '16th' }); // First placeholder
     } else {
         const deltaTime = now - lastHitTime;
@@ -360,6 +430,10 @@ export function handlePlay() {
         domElements.playBtn.textContent = "Pause";
         osmdTarget.cursor.show();
         osmdTarget.cursor.reset();
+        // FIX: Initialize the timing chain for the first note.
+        nextTargetNoteIdealHitTime = performance.now();
+        // Sync the clocks at the beginning of playback
+        audioPerformanceOffset = metronome.audioCtx.currentTime * 1000 - nextTargetNoteIdealHitTime;
         playNextNote();
     } else {
         domElements.playBtn.textContent = "Play";
@@ -401,10 +475,10 @@ export async function initialize() {
         drawingParameters: "compact",
         drawCursor: true,
     });
- 
+
     metronome = new Metronome();
-     await loadTargetScore();
-     osmdTarget.cursor.hide();
+    await loadTargetScore();
+    osmdTarget.cursor.hide();
     await loadUserScore();
     console.log("Application initialized.");
 }
